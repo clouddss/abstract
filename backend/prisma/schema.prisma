@@ -31,7 +31,7 @@ model Token {
   volume24h       String   @default("0")
   volume7d        String   @default("0")
   volumeTotal     String   @default("0")
-  holders         Int      @default(0)
+  holderCount     Int      @default(0)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

@@ -57,7 +57,7 @@ export async function handleTokenLaunched(event: TokenLaunchedEvent): Promise<vo
         volume24h: "0",
         volume7d: "0",
         volumeTotal: "0",
-        holders: 0,
+        holderCount: 0,
         createdAt: timestamp,
         updatedAt: timestamp
       }

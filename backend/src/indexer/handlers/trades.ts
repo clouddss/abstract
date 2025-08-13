@@ -294,7 +294,7 @@ async function updateTokenHolderCount(tokenAddress: string): Promise<void> {
 
     await prisma.token.update({
       where: { address: tokenAddress },
-      data: { holders: holderCount }
+      data: { holderCount: holderCount }
     });
 
   } catch (error) {

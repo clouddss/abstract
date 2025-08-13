@@ -115,7 +115,7 @@ router.get('/', validateRequest(getTokensSchema), async (req, res) => {
         orderBy = { marketCap: order };
         break;
       case 'holders':
-        orderBy = { holders: order };
+        orderBy = { holderCount: order };
         break;
       default:
         orderBy = { createdAt: order };
@@ -164,7 +164,7 @@ router.get('/', validateRequest(getTokensSchema), async (req, res) => {
       volume24h: token.volume24h,
       volume7d: token.volume7d,
       volumeTotal: token.volumeTotal,
-      holders: token.holders,
+      holders: token.holderCount,
       trades: token._count.trades,
       createdAt: token.createdAt,
       progress: calculateProgress(token.soldSupply, token.curveSupply)
