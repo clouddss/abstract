@@ -1,0 +1,209 @@
+// Prisma schema for Abstract Pump Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Token {
+  id              String   @id @default(cuid())
+  address         String   @unique
+  name            String
+  symbol          String
+  description     String?
+  imageUrl        String?
+  website         String?
+  twitter         String?
+  telegram        String?
+  creator         String
+  bondingCurve    String
+  migrated        Boolean  @default(false)
+  migratedAt      DateTime?
+  dexPair         String?
+  totalSupply     String   @default("1000000000000000000000000000") // 1B tokens in wei
+  curveSupply     String   @default("700000000000000000000000000")   // 700M tokens in wei
+  soldSupply      String   @default("0")
+  marketCap       String   @default("0")
+  volume24h       String   @default("0")
+  volume7d        String   @default("0")
+  volumeTotal     String   @default("0")
+  holders         Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  trades          Trade[]
+  holders         Holder[]
+  priceData       PriceData[]
+  rewards         RewardDistribution[]
+
+  @@map("tokens")
+}
+
+model Trade {
+  id            String    @id @default(cuid())
+  tokenAddress  String
+  trader        String
+  type          TradeType
+  amountIn      String    // ETH amount for buys, token amount for sells
+  amountOut     String    // Token amount for buys, ETH amount for sells
+  price         String    // Price per token at time of trade
+  feeAmount     String    // Platform fee collected
+  txHash        String    @unique
+  blockNumber   Int
+  blockHash     String
+  logIndex      Int
+  timestamp     DateTime
+  createdAt     DateTime  @default(now())
+
+  // Relations
+  token         Token     @relation(fields: [tokenAddress], references: [address], onDelete: Cascade)
+
+  @@map("trades")
+  @@index([tokenAddress, timestamp])
+  @@index([trader, timestamp])
+  @@index([timestamp])
+}
+
+model Holder {
+  id                String   @id @default(cuid())
+  tokenAddress      String
+  wallet            String
+  balance           String   @default("0")
+  avgHoldTime       Int      @default(0) // Average holding time in seconds
+  firstBoughtAt     DateTime?
+  lastActivity      DateTime @default(now())
+  totalBought       String   @default("0")
+  totalSold         String   @default("0")
+  realizedPnl       String   @default("0")
+  unrealizedPnl     String   @default("0")
+  rewardsClaimed    String   @default("0")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  token             Token    @relation(fields: [tokenAddress], references: [address], onDelete: Cascade)
+
+  @@map("holders")
+  @@unique([tokenAddress, wallet])
+  @@index([tokenAddress, balance])
+  @@index([wallet])
+}
+
+model PriceData {
+  id            String   @id @default(cuid())
+  tokenAddress  String
+  timestamp     DateTime
+  open          String
+  high          String
+  low           String
+  close         String
+  volume        String
+  volumeUsd     String
+  interval      Interval
+  createdAt     DateTime @default(now())
+
+  // Relations
+  token         Token    @relation(fields: [tokenAddress], references: [address], onDelete: Cascade)
+
+  @@map("price_data")
+  @@unique([tokenAddress, timestamp, interval])
+  @@index([tokenAddress, interval, timestamp])
+}
+
+model RewardEpoch {
+  id              String    @id @default(cuid())
+  epochNumber     Int       @unique
+  startTime       DateTime
+  endTime         DateTime
+  totalEthRewards String    @default("0")
+  totalUsdcRewards String   @default("0")
+  merkleRoot      String?
+  snapshotTaken   Boolean   @default(false)
+  finalized       Boolean   @default(false)
+  claimDeadline   DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  distributions   RewardDistribution[]
+
+  @@map("reward_epochs")
+}
+
+model RewardDistribution {
+  id            String   @id @default(cuid())
+  epochNumber   Int
+  tokenAddress  String
+  wallet        String
+  ethAmount     String   @default("0")
+  usdcAmount    String   @default("0")
+  weight        String   @default("0") // Weight based on time-weighted balance
+  claimed       Boolean  @default(false)
+  claimedAt     DateTime?
+  txHash        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  epoch         RewardEpoch @relation(fields: [epochNumber], references: [epochNumber], onDelete: Cascade)
+  token         Token       @relation(fields: [tokenAddress], references: [address], onDelete: Cascade)
+
+  @@map("reward_distributions")
+  @@unique([epochNumber, tokenAddress, wallet])
+  @@index([epochNumber, wallet])
+  @@index([wallet, claimed])
+}
+
+model PlatformStats {
+  id                String   @id @default(cuid())
+  date              DateTime @unique @default(now())
+  totalTokens       Int      @default(0)
+  totalTrades       Int      @default(0)
+  totalVolume       String   @default("0")
+  totalFees         String   @default("0")
+  activeTraders     Int      @default(0)
+  newTokens24h      Int      @default(0)
+  volume24h         String   @default("0")
+  fees24h           String   @default("0")
+  migratedTokens    Int      @default(0)
+  totalHolders      Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("platform_stats")
+}
+
+model IndexerState {
+  id            String   @id @default(cuid())
+  contractName  String   @unique
+  lastBlock     Int      @default(0)
+  lastTxHash    String?
+  lastLogIndex  Int      @default(0)
+  synced        Boolean  @default(false)
+  syncedAt      DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("indexer_state")
+}
+
+// Enums
+enum TradeType {
+  BUY
+  SELL
+}
+
+enum Interval {
+  MINUTE_1
+  MINUTE_5
+  MINUTE_15
+  HOUR_1
+  HOUR_4
+  DAY_1
+  WEEK_1
+}

@@ -1,0 +1,139 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: abstract-pump-db
+    environment:
+      POSTGRES_DB: abstract_pump
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/prisma/schema.prisma:/docker-entrypoint-initdb.d/schema.prisma
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: abstract-pump-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API & Indexer
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: abstract-pump-backend
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/abstract_pump
+      REDIS_URL: redis://redis:6379
+      PORT: 3001
+      ABSTRACT_RPC_URL: ${ABSTRACT_RPC_URL:-https://api.testnet.abs.xyz}
+      LAUNCH_FACTORY_ADDRESS: ${LAUNCH_FACTORY_ADDRESS}
+      PLATFORM_ROUTER_ADDRESS: ${PLATFORM_ROUTER_ADDRESS}
+      REWARDS_VAULT_ADDRESS: ${REWARDS_VAULT_ADDRESS}
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: npm run dev
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Indexer Service (separate from API)
+  indexer:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: abstract-pump-indexer
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/abstract_pump
+      REDIS_URL: redis://redis:6379
+      ABSTRACT_RPC_URL: ${ABSTRACT_RPC_URL:-https://api.testnet.abs.xyz}
+      LAUNCH_FACTORY_ADDRESS: ${LAUNCH_FACTORY_ADDRESS}
+      PLATFORM_ROUTER_ADDRESS: ${PLATFORM_ROUTER_ADDRESS}
+      REWARDS_VAULT_ADDRESS: ${REWARDS_VAULT_ADDRESS}
+      INDEXER_INTERVAL_MS: 5000
+      START_BLOCK: ${START_BLOCK:-0}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: npm run indexer
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: abstract-pump-frontend
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_CHAIN_ID: 11124
+      NEXT_PUBLIC_RPC_URL: ${ABSTRACT_RPC_URL:-https://api.testnet.abs.xyz}
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+      NEXT_PUBLIC_EXPLORER_URL: https://explorer.testnet.abs.xyz
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    command: npm run dev
+
+  # Nginx Reverse Proxy (Production)
+  nginx:
+    image: nginx:alpine
+    container_name: abstract-pump-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./docker/nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - frontend
+      - backend
+    profiles:
+      - production
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  default:
+    name: abstract-pump-network
