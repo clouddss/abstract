@@ -34,7 +34,9 @@ const claimRewardsSchema = z.object({
 router.get('/:wallet', validateRequest(getRewardsSchema), async (req, res) => {
   try {
     const { wallet } = req.params;
-    const { page, limit, claimed } = req.query;
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 20;
+    const claimed = req.query.claimed === 'true' ? true : req.query.claimed === 'false' ? false : undefined;
 
     // Build where clause
     const where: any = { wallet };
@@ -66,27 +68,32 @@ router.get('/:wallet', validateRequest(getRewardsSchema), async (req, res) => {
     ]);
 
     // Calculate totals
-    const totals = await prisma.rewardDistribution.aggregate({
+    const allRewards = await prisma.rewardDistribution.findMany({
       where: { wallet },
-      _sum: {
-        ethAmount: true,
-        usdcAmount: true
-      }
+      select: { ethAmount: true, usdcAmount: true, claimed: true }
     });
 
-    const claimedTotals = await prisma.rewardDistribution.aggregate({
-      where: { wallet, claimed: true },
-      _sum: {
-        ethAmount: true,
-        usdcAmount: true
-      }
-    });
+    // Calculate sums using BigInt for string numeric fields
+    let totalEth = 0n;
+    let totalUsdc = 0n;
+    let claimedEth = 0n;
+    let claimedUsdc = 0n;
+    let unclaimedEth = 0n;
+    let unclaimedUsdc = 0n;
 
-    const unclaimedTotals = await prisma.rewardDistribution.aggregate({
-      where: { wallet, claimed: false },
-      _sum: {
-        ethAmount: true,
-        usdcAmount: true
+    allRewards.forEach(reward => {
+      const ethAmount = BigInt(reward.ethAmount);
+      const usdcAmount = BigInt(reward.usdcAmount);
+      
+      totalEth += ethAmount;
+      totalUsdc += usdcAmount;
+      
+      if (reward.claimed) {
+        claimedEth += ethAmount;
+        claimedUsdc += usdcAmount;
+      } else {
+        unclaimedEth += ethAmount;
+        unclaimedUsdc += usdcAmount;
       }
     });
 
@@ -117,12 +124,12 @@ router.get('/:wallet', validateRequest(getRewardsSchema), async (req, res) => {
       data: {
         rewards: formattedRewards,
         summary: {
-          totalEth: totals._sum.ethAmount || '0',
-          totalUsdc: totals._sum.usdcAmount || '0',
-          claimedEth: claimedTotals._sum.ethAmount || '0',
-          claimedUsdc: claimedTotals._sum.usdcAmount || '0',
-          unclaimedEth: unclaimedTotals._sum.ethAmount || '0',
-          unclaimedUsdc: unclaimedTotals._sum.usdcAmount || '0'
+          totalEth: totalEth.toString(),
+          totalUsdc: totalUsdc.toString(),
+          claimedEth: claimedEth.toString(),
+          claimedUsdc: claimedUsdc.toString(),
+          unclaimedEth: unclaimedEth.toString(),
+          unclaimedUsdc: unclaimedUsdc.toString()
         },
         pagination: {
           page,
@@ -396,31 +403,39 @@ router.get('/leaderboard', async (req, res) => {
       };
     }
 
-    // Get top reward earners
-    const topEarners = await prisma.rewardDistribution.groupBy({
-      by: ['wallet'],
+    // Get all rewards for the timeframe
+    const allRewardsInTimeframe = await prisma.rewardDistribution.findMany({
       where: timeFilter,
-      _sum: {
+      select: {
+        wallet: true,
         ethAmount: true,
         usdcAmount: true
-      },
-      _count: {
-        _all: true
-      },
-      orderBy: {
-        _sum: {
-          ethAmount: 'desc'
-        }
-      },
-      take: limit
+      }
     });
 
-    const leaderboard = topEarners.map((earner, index) => ({
+    // Aggregate by wallet
+    const walletTotals = new Map<string, { ethAmount: bigint; usdcAmount: bigint; count: number }>();
+    
+    allRewardsInTimeframe.forEach(reward => {
+      const current = walletTotals.get(reward.wallet) || { ethAmount: 0n, usdcAmount: 0n, count: 0 };
+      walletTotals.set(reward.wallet, {
+        ethAmount: current.ethAmount + BigInt(reward.ethAmount),
+        usdcAmount: current.usdcAmount + BigInt(reward.usdcAmount),
+        count: current.count + 1
+      });
+    });
+
+    // Sort by ethAmount and take top earners
+    const sortedEarners = Array.from(walletTotals.entries())
+      .sort((a, b) => Number(b[1].ethAmount - a[1].ethAmount))
+      .slice(0, limit);
+
+    const leaderboard = sortedEarners.map(([wallet, totals], index) => ({
       rank: index + 1,
-      wallet: earner.wallet,
-      totalEthRewards: earner._sum.ethAmount || '0',
-      totalUsdcRewards: earner._sum.usdcAmount || '0',
-      totalClaims: earner._count._all
+      wallet,
+      totalEthRewards: totals.ethAmount.toString(),
+      totalUsdcRewards: totals.usdcAmount.toString(),
+      totalClaims: totals.count
     }));
 
     res.json({

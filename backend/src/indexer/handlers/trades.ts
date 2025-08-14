@@ -131,46 +131,72 @@ async function updateHolderRecord(
   const tokenAmountBig = BigInt(tokenAmount);
 
   try {
-    const holder = await prisma.holder.upsert({
+    // First, try to find existing holder
+    const existingHolder = await prisma.holder.findUnique({
       where: {
         tokenAddress_wallet: {
           tokenAddress,
           wallet
         }
-      },
-      update: {
-        balance: isBuy 
-          ? { increment: tokenAmount }
-          : { decrement: tokenAmount },
-        totalBought: isBuy ? { increment: tokenAmount } : undefined,
-        totalSold: !isBuy ? { increment: tokenAmount } : undefined,
-        lastActivity: timestamp,
-        updatedAt: timestamp
-      },
-      create: {
-        tokenAddress,
-        wallet,
-        balance: isBuy ? tokenAmount : "0",
-        totalBought: isBuy ? tokenAmount : "0",
-        totalSold: !isBuy ? tokenAmount : "0",
-        firstBoughtAt: isBuy ? timestamp : null,
-        lastActivity: timestamp,
-        avgHoldTime: 0,
-        realizedPnl: "0",
-        unrealizedPnl: "0",
-        rewardsClaimed: "0"
       }
     });
 
+    if (existingHolder) {
+      // Calculate new values
+      const currentBalance = BigInt(existingHolder.balance);
+      const currentTotalBought = BigInt(existingHolder.totalBought);
+      const currentTotalSold = BigInt(existingHolder.totalSold);
+      
+      const newBalance = isBuy 
+        ? currentBalance + tokenAmountBig
+        : currentBalance - tokenAmountBig;
+      
+      const newTotalBought = isBuy 
+        ? currentTotalBought + tokenAmountBig
+        : currentTotalBought;
+      
+      const newTotalSold = !isBuy 
+        ? currentTotalSold + tokenAmountBig
+        : currentTotalSold;
+
+      await prisma.holder.update({
+        where: { id: existingHolder.id },
+        data: {
+          balance: newBalance.toString(),
+          totalBought: newTotalBought.toString(),
+          totalSold: newTotalSold.toString(),
+          lastActivity: timestamp,
+          updatedAt: timestamp
+        }
+      });
+    } else {
+      // Create new holder
+      await prisma.holder.create({
+        data: {
+          tokenAddress,
+          wallet,
+          balance: isBuy ? tokenAmount : "0",
+          totalBought: isBuy ? tokenAmount : "0",
+          totalSold: !isBuy ? tokenAmount : "0",
+          firstBoughtAt: isBuy ? timestamp : null,
+          lastActivity: timestamp,
+          avgHoldTime: 0,
+          realizedPnl: "0",
+          unrealizedPnl: "0",
+          rewardsClaimed: "0"
+        }
+      });
+    }
+
     // Remove holder if balance reaches zero
-    if (!isBuy) {
+    if (!isBuy && existingHolder) {
       const updatedHolder = await prisma.holder.findUnique({
-        where: { id: holder.id }
+        where: { id: existingHolder.id }
       });
       
       if (updatedHolder && BigInt(updatedHolder.balance) <= 0n) {
         await prisma.holder.delete({
-          where: { id: holder.id }
+          where: { id: existingHolder.id }
         });
       }
     }
@@ -310,30 +336,52 @@ async function updatePlatformTradeStats(
   const today = new Date(timestamp.getFullYear(), timestamp.getMonth(), timestamp.getDate());
   
   try {
-    await prisma.platformStats.upsert({
-      where: { date: today },
-      update: {
-        totalTrades: { increment: 1 },
-        totalVolume: { increment: ethAmount },
-        totalFees: { increment: feeAmount },
-        volume24h: { increment: ethAmount },
-        fees24h: { increment: feeAmount },
-        updatedAt: new Date()
-      },
-      create: {
-        date: today,
-        totalTokens: 0,
-        totalTrades: 1,
-        totalVolume: ethAmount,
-        totalFees: feeAmount,
-        activeTraders: 0,
-        newTokens24h: 0,
-        volume24h: ethAmount,
-        fees24h: feeAmount,
-        migratedTokens: 0,
-        totalHolders: 0
-      }
+    // First find existing stats
+    const existingStats = await prisma.platformStats.findUnique({
+      where: { date: today }
     });
+
+    if (existingStats) {
+      // Calculate new values
+      const currentTotalVolume = BigInt(existingStats.totalVolume);
+      const currentTotalFees = BigInt(existingStats.totalFees);
+      const currentVolume24h = BigInt(existingStats.volume24h);
+      const currentFees24h = BigInt(existingStats.fees24h);
+      
+      const newTotalVolume = currentTotalVolume + BigInt(ethAmount);
+      const newTotalFees = currentTotalFees + BigInt(feeAmount);
+      const newVolume24h = currentVolume24h + BigInt(ethAmount);
+      const newFees24h = currentFees24h + BigInt(feeAmount);
+
+      await prisma.platformStats.update({
+        where: { date: today },
+        data: {
+          totalTrades: existingStats.totalTrades + 1,
+          totalVolume: newTotalVolume.toString(),
+          totalFees: newTotalFees.toString(),
+          volume24h: newVolume24h.toString(),
+          fees24h: newFees24h.toString(),
+          updatedAt: new Date()
+        }
+      });
+    } else {
+      // Create new stats
+      await prisma.platformStats.create({
+        data: {
+          date: today,
+          totalTokens: 0,
+          totalTrades: 1,
+          totalVolume: ethAmount,
+          totalFees: feeAmount,
+          activeTraders: 0,
+          newTokens24h: 0,
+          volume24h: ethAmount,
+          fees24h: feeAmount,
+          migratedTokens: 0,
+          totalHolders: 0
+        }
+      });
+    }
 
   } catch (error) {
     console.error('Error updating platform trade stats:', error);
@@ -358,32 +406,57 @@ async function updatePriceData(
   );
 
   try {
-    await prisma.priceData.upsert({
+    // Check if price data exists
+    const existingPriceData = await prisma.priceData.findUnique({
       where: {
         tokenAddress_timestamp_interval: {
           tokenAddress,
           timestamp: hourTimestamp,
           interval: 'HOUR_1'
         }
-      },
-      update: {
-        close: price,
-        high: price, // Simplified - should compare with existing high
-        volume: { increment: volume },
-        volumeUsd: "0" // Would calculate USD value
-      },
-      create: {
-        tokenAddress,
-        timestamp: hourTimestamp,
-        interval: 'HOUR_1',
-        open: price,
-        high: price,
-        low: price,
-        close: price,
-        volume,
-        volumeUsd: "0"
       }
     });
+
+    if (existingPriceData) {
+      // Update existing data
+      const currentVolume = BigInt(existingPriceData.volume);
+      const newVolume = currentVolume + BigInt(volume);
+      const currentHigh = parseFloat(existingPriceData.high);
+      const currentLow = parseFloat(existingPriceData.low);
+      const priceFloat = parseFloat(price);
+
+      await prisma.priceData.update({
+        where: {
+          tokenAddress_timestamp_interval: {
+            tokenAddress,
+            timestamp: hourTimestamp,
+            interval: 'HOUR_1'
+          }
+        },
+        data: {
+          close: price,
+          high: priceFloat > currentHigh ? price : existingPriceData.high,
+          low: priceFloat < currentLow ? price : existingPriceData.low,
+          volume: newVolume.toString(),
+          volumeUsd: "0" // Would calculate USD value
+        }
+      });
+    } else {
+      // Create new price data
+      await prisma.priceData.create({
+        data: {
+          tokenAddress,
+          timestamp: hourTimestamp,
+          interval: 'HOUR_1',
+          open: price,
+          high: price,
+          low: price,
+          close: price,
+          volume,
+          volumeUsd: "0"
+        }
+      });
+    }
 
   } catch (error) {
     console.error(`Error updating price data for ${tokenAddress}:`, error);

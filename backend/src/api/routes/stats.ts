@@ -46,13 +46,19 @@ router.get('/platform', async (req, res) => {
       prisma.token.count(),
       prisma.token.count({ where: { migrated: true } }),
       prisma.trade.count({ where: { timestamp: { gte: startTime } } }),
-      prisma.trade.aggregate({
+      prisma.trade.findMany({
         where: { timestamp: { gte: startTime } },
-        _sum: { amountIn: true }
+        select: { amountIn: true }
+      }).then(trades => {
+        const total = trades.reduce((sum, trade) => sum + BigInt(trade.amountIn), 0n);
+        return { _sum: { amountIn: total.toString() } };
       }),
-      prisma.trade.aggregate({
+      prisma.trade.findMany({
         where: { timestamp: { gte: startTime } },
-        _sum: { feeAmount: true }
+        select: { feeAmount: true }
+      }).then(trades => {
+        const total = trades.reduce((sum, trade) => sum + BigInt(trade.feeAmount), 0n);
+        return { _sum: { feeAmount: total.toString() } };
       }),
       prisma.trade.groupBy({
         by: ['trader'],
@@ -166,41 +172,69 @@ router.get('/leaderboards', async (req, res) => {
     }
 
     // Top traders by volume
-    const topTraders = await prisma.trade.groupBy({
-      by: ['trader'],
+    const allTrades = await prisma.trade.findMany({
       where: { timestamp: { gte: startTime } },
-      _sum: {
+      select: {
+        trader: true,
         amountIn: true,
         feeAmount: true
-      },
-      _count: {
-        _all: true
-      },
-      orderBy: {
-        _sum: {
-          amountIn: 'desc'
-        }
-      },
-      take: limit
+      }
     });
 
-    // Top tokens by volume
-    const topTokensByVolume = await prisma.trade.groupBy({
-      by: ['tokenAddress'],
-      where: { timestamp: { gte: startTime } },
-      _sum: {
-        amountIn: true
-      },
-      _count: {
-        _all: true
-      },
-      orderBy: {
-        _sum: {
-          amountIn: 'desc'
-        }
-      },
-      take: limit
+    // Aggregate trades by trader
+    const traderStats = new Map<string, { amountIn: bigint; feeAmount: bigint; count: number }>();
+    
+    allTrades.forEach(trade => {
+      const current = traderStats.get(trade.trader) || { amountIn: 0n, feeAmount: 0n, count: 0 };
+      traderStats.set(trade.trader, {
+        amountIn: current.amountIn + BigInt(trade.amountIn),
+        feeAmount: current.feeAmount + BigInt(trade.feeAmount),
+        count: current.count + 1
+      });
     });
+
+    // Sort by volume and take top traders
+    const topTraders = Array.from(traderStats.entries())
+      .sort((a, b) => Number(b[1].amountIn - a[1].amountIn))
+      .slice(0, limit)
+      .map(([trader, stats]) => ({
+        trader,
+        _sum: {
+          amountIn: stats.amountIn.toString(),
+          feeAmount: stats.feeAmount.toString()
+        },
+        _count: { _all: stats.count }
+      }));
+
+    // Top tokens by volume - get all trades for tokens
+    const tokenTrades = await prisma.trade.findMany({
+      where: { timestamp: { gte: startTime } },
+      select: {
+        tokenAddress: true,
+        amountIn: true
+      }
+    });
+
+    // Aggregate by token
+    const tokenVolumeStats = new Map<string, { amountIn: bigint; count: number }>();
+    
+    tokenTrades.forEach(trade => {
+      const current = tokenVolumeStats.get(trade.tokenAddress) || { amountIn: 0n, count: 0 };
+      tokenVolumeStats.set(trade.tokenAddress, {
+        amountIn: current.amountIn + BigInt(trade.amountIn),
+        count: current.count + 1
+      });
+    });
+
+    // Sort by volume and take top tokens
+    const topTokensByVolume = Array.from(tokenVolumeStats.entries())
+      .sort((a, b) => Number(b[1].amountIn - a[1].amountIn))
+      .slice(0, limit)
+      .map(([tokenAddress, stats]) => ({
+        tokenAddress,
+        _sum: { amountIn: stats.amountIn.toString() },
+        _count: { _all: stats.count }
+      }));
 
     // Get token details for top tokens
     const tokenAddresses = topTokensByVolume.map(t => t.tokenAddress);

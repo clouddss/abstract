@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../database/client';
 import { validateRequest } from '../middleware/validation';
+import { Interval } from '@prisma/client';
 
 const router = Router();
 
@@ -84,7 +85,13 @@ router.post('/create', validateRequest(createTokenSchema), async (req, res) => {
  */
 router.get('/', validateRequest(getTokensSchema), async (req, res) => {
   try {
-    const { page, limit, sort, order, creator, migrated, search } = req.query;
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 20;
+    const sort = req.query.sort as string || 'created';
+    const order = req.query.order as 'asc' | 'desc' || 'desc';
+    const creator = req.query.creator as string | undefined;
+    const migrated = req.query.migrated === 'true' ? true : req.query.migrated === 'false' ? false : undefined;
+    const search = req.query.search as string | undefined;
     
     // Build where clause
     const where: any = {};
@@ -205,10 +212,7 @@ router.get('/:address', validateRequest(getTokenSchema), async (req, res) => {
       include: {
         trades: {
           orderBy: { timestamp: 'desc' },
-          take: 10,
-          include: {
-            _count: true
-          }
+          take: 10
         },
         holders: {
           orderBy: { balance: 'desc' },
@@ -293,7 +297,9 @@ router.get('/:address', validateRequest(getTokenSchema), async (req, res) => {
 router.get('/:address/chart', validateRequest(getTokenChartSchema), async (req, res) => {
   try {
     const { address } = req.params;
-    const { interval, from, to } = req.query;
+    const interval = req.query.interval as string || '1h';
+    const from = req.query.from ? new Date(req.query.from as string) : undefined;
+    const to = req.query.to ? new Date(req.query.to as string) : undefined;
 
     // Convert interval to database enum
     const intervalMap: Record<string, string> = {
@@ -339,7 +345,7 @@ router.get('/:address/chart', validateRequest(getTokenChartSchema), async (req, 
     const priceData = await prisma.priceData.findMany({
       where: {
         tokenAddress: address,
-        interval: dbInterval,
+        interval: dbInterval as Interval,
         ...(Object.keys(timeRange).length > 0 && { timestamp: timeRange })
       },
       orderBy: { timestamp: 'asc' }

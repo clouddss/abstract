@@ -102,8 +102,8 @@ nano .env
 # Add your other production values (RPC URLs, contract addresses, etc.)
 
 # Run database migrations
-npm run db:generate
-npm run db:push
+npm run generate    # Generate Prisma client
+npm run migrate     # Apply database migrations
 
 # Build backend
 npm run build
