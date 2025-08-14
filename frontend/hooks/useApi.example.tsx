@@ -3,7 +3,7 @@
  * This file demonstrates best practices for using the API services
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   tokensService, 
@@ -15,6 +15,7 @@ import {
   GetTokensParams,
   Address,
   TradeType,
+  ChartInterval,
 } from '@/lib/api';
 
 // Example: Fetching tokens with React Query
@@ -249,9 +250,6 @@ export function useTokensWithRetry(params?: GetTokensParams) {
     queryFn: () => tokensService.getTokens(params),
     retry: 3,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-    onError: (error) => {
-      console.error('Failed to fetch tokens:', handleApiError(error));
-    },
   });
   
   const manualRetry = useCallback(() => {
@@ -275,11 +273,13 @@ export function useInfiniteTokens(params?: Omit<GetTokensParams, 'page' | 'limit
   const initialQuery = useQuery({
     queryKey: ['infinite-tokens', params, 1],
     queryFn: () => tokensService.getTokens({ ...params, page: 1, limit }),
-    onSuccess: (data) => {
-      setTokens(data.tokens);
-      setHasMore(data.pagination.page < data.pagination.pages);
-    },
   });
+
+  // Handle success data
+  if (initialQuery.data && tokens.length === 0) {
+    setTokens(initialQuery.data.tokens);
+    setHasMore(initialQuery.data.pagination.page < initialQuery.data.pagination.pages);
+  }
   
   const loadMore = useCallback(async () => {
     if (!hasMore || isLoadingMore) return;
