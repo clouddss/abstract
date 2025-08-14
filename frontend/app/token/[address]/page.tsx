@@ -34,7 +34,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 export default function TokenPage() {
   const params = useParams()
-  const tokenAddress = params.address as string
+  const tokenAddress = params.address as `0x${string}`
   
   const [isLiked, setIsLiked] = useState(false)
   const [chartInterval, setChartInterval] = useState<'1h' | '4h' | '1d' | '1w'>('1d')
