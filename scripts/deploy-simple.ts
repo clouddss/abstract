@@ -40,7 +40,12 @@ async function main() {
     // If BaseToken works, try BondingCurve
     console.log("\n2️⃣ Deploying BondingCurve...");
     const BondingCurve = await ethers.getContractFactory("BondingCurve");
-    const bondingCurve = await BondingCurve.deploy();
+    const bondingCurve = await BondingCurve.deploy(
+      tokenAddress,      // token address (using the one we just deployed)
+      deployer.address,  // creator
+      deployer.address,  // factory (using deployer as placeholder)
+      deployer.address   // platform treasury
+    );
     await bondingCurve.waitForDeployment();
     const bondingCurveAddress = await bondingCurve.getAddress();
     console.log("✅ BondingCurve deployed to:", bondingCurveAddress);
