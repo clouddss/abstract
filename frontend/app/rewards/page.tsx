@@ -276,24 +276,21 @@ export default function RewardsPage() {
                   ) : history?.rewards && history.rewards.length > 0 ? (
                     history.rewards.map((reward) => (
                     <tr key={reward.id} className="hover:bg-white/5 transition-colors">
-                      <td className="px-6 py-4 text-sm capitalize">{reward.type.replace('_', ' ')}</td>
-                      <td className="px-6 py-4 text-sm font-semibold">{formatETH(reward.amount)} ETH</td>
+                      <td className="px-6 py-4 text-sm capitalize">Reward</td>
+                      <td className="px-6 py-4 text-sm font-semibold">{formatETH(reward.ethAmount)} ETH</td>
                       <td className="px-6 py-4 text-sm">{reward.tokenSymbol || '-'}</td>
-                      <td className="px-6 py-4 text-sm text-muted-foreground">{formatTimestamp(reward.timestamp)}</td>
+                      <td className="px-6 py-4 text-sm text-muted-foreground">{formatTimestamp(reward.claimedAt || '')}</td>
                       <td className="px-6 py-4 text-sm">
                         <span className={`
                           px-2 py-1 rounded-full text-xs font-medium
-                          ${reward.status === 'claimed' 
-                            ? 'bg-green-500/10 text-green-400' 
-                            : 'bg-yellow-500/10 text-yellow-400'
-                          }
+                          bg-green-500/10 text-green-400
                         `}>
-                          {reward.status}
+                          Claimed
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm">
                         <Button variant="outline" size="sm" asChild>
-                          <a href={`https://etherscan.io/tx/${reward.txHash}`} target="_blank" rel="noopener noreferrer">
+                          <a href={reward.txHash ? `https://explorer.testnet.abs.xyz/tx/${reward.txHash}` : '#'} target="_blank" rel="noopener noreferrer">
                             <ExternalLink className="h-3 w-3 mr-1" />
                             View
                           </a>
