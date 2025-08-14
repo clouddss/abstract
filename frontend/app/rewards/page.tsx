@@ -338,15 +338,15 @@ export default function RewardsPage() {
                     <div className="flex flex-col sm:flex-row gap-4 lg:gap-6">
                       <div className="text-center">
                         <p className="text-sm text-muted-foreground">Earned</p>
-                        <p className="text-lg font-semibold text-green-400">{formatETH(position.earned)} ETH</p>
+                        <p className="text-lg font-semibold text-green-400">{formatETH(position.ethAmount)} ETH</p>
                       </div>
                       <div className="text-center">
                         <p className="text-sm text-muted-foreground">Pending</p>
-                        <p className="text-lg font-semibold text-yellow-400">{formatETH(position.pending)} ETH</p>
+                        <p className="text-lg font-semibold text-yellow-400">{formatETH(position.ethAmount)} ETH</p>
                       </div>
                       <div className="text-center">
                         <p className="text-sm text-muted-foreground">Share</p>
-                        <p className="text-lg font-semibold text-primary">{position.share || 0}%</p>
+                        <p className="text-lg font-semibold text-primary">{parseFloat(position.weight) * 100}%</p>
                       </div>
                     </div>
                   </div>

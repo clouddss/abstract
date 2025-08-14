@@ -3,11 +3,6 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   
-  // Disable TypeScript errors during build
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  
   // Production optimizations
   poweredByHeader: false,
   compress: true,
