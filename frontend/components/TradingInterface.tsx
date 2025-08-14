@@ -58,10 +58,16 @@ export function TradingInterface({
   const executeTrade = useExecuteTrade()
   
   // Subscribe to price updates
-  const { data: priceUpdate } = useWebSocket('price_update', {
-    enabled: !!tokenAddress,
-    filter: (data) => data.tokenAddress === tokenAddress
-  })
+  const { lastMessage } = useWebSocket(
+    process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3002',
+    { autoConnect: !!tokenAddress }
+  )
+  
+  // Filter for price updates for this token
+  const priceUpdate = lastMessage?.type === 'price_update' && 
+    lastMessage?.data?.tokenAddress === tokenAddress 
+    ? lastMessage.data 
+    : null
 
   const handleTrade = async () => {
     if (!isConnected) {
