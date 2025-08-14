@@ -153,7 +153,6 @@ contract BaseToken is ERC20, ERC20Permit, Ownable, ReentrancyGuard {
 
     /**
      * @notice Get complete token information
-     * @return Complete token information
      */
     function getTokenInfo() external view returns (
         string memory name_,
