@@ -88,7 +88,7 @@ async function main() {
     const launchReceipt = await launchTx.wait();
 
     // Find the TokenLaunched event
-    const tokenLaunchedEvent = launchReceipt?.logs.find(log => {
+    const tokenLaunchedEvent = launchReceipt?.logs.find((log: any) => {
         try {
             const parsed = launchFactory.interface.parseLog(log);
             return parsed?.name === "TokenLaunched";
