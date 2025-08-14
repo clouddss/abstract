@@ -31,6 +31,7 @@ import { formatETH, formatAddress, formatNumber, formatTimestamp, calculatePrice
 import { copyToClipboard, formatError } from '@/lib/utils/ui'
 import { toast } from 'sonner'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ChartInterval } from '@/lib/api/types/common.types'
 
 export default function TokenPage() {
   const params = useParams()
@@ -39,7 +40,7 @@ export default function TokenPage() {
   const tokenAddress = (rawAddress.startsWith('0x') ? rawAddress : `0x${rawAddress}`) as `0x${string}`
   
   const [isLiked, setIsLiked] = useState(false)
-  const [chartInterval, setChartInterval] = useState<'1h' | '4h' | '1d' | '1w'>('1d')
+  const [chartInterval, setChartInterval] = useState<ChartInterval>(ChartInterval.ONE_DAY)
   
   // Fetch token data
   const { data: token, isLoading, error } = useToken(tokenAddress)
@@ -276,17 +277,22 @@ export default function TokenPage() {
                   Price Chart
                 </h3>
                 <div className="flex items-center space-x-2">
-                  {['1h', '4h', '1d', '1w'].map((interval) => (
+                  {[
+                    { value: ChartInterval.ONE_HOUR, label: '1h' },
+                    { value: ChartInterval.FOUR_HOURS, label: '4h' },
+                    { value: ChartInterval.ONE_DAY, label: '1d' },
+                    { value: ChartInterval.ONE_WEEK, label: '1w' }
+                  ].map(({ value, label }) => (
                     <button
-                      key={interval}
-                      onClick={() => setChartInterval(interval as any)}
+                      key={value}
+                      onClick={() => setChartInterval(value)}
                       className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                        chartInterval === interval 
+                        chartInterval === value 
                           ? 'bg-primary text-white' 
                           : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
                       }`}
                     >
-                      {interval}
+                      {label}
                     </button>
                   ))}
                 </div>
