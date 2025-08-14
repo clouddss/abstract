@@ -327,7 +327,7 @@ export default function RewardsPage() {
                       <div className="flex items-center space-x-3 mb-2">
                         <h3 className="text-xl font-semibold">{position.tokenSymbol}</h3>
                         <span className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full">
-                          {position.type === 'creator' ? 'Creator' : `Top Holder #${position.holderRank || '-'}`}
+                          Token Holder
                         </span>
                       </div>
                       <p className="text-muted-foreground text-sm font-mono">
