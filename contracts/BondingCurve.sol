@@ -161,7 +161,7 @@ contract BondingCurve is IBondingCurve, ReentrancyGuard, Ownable {
         soldSupply += tokenAmount;
 
         // Transfer tokens to buyer
-        token.safeTransfer(msg.sender, tokenAmount);
+        require(token.transfer(msg.sender, tokenAmount), "Token transfer failed");
 
         // Distribute fees
         _distributeFees(totalFees);
