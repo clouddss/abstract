@@ -1,98 +1,94 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { tokensService } from '@/lib/api/services/tokens.service'
+import { GetTokensParams, GetTokensResponse, TokenDetails } from '@/lib/api/types/token.types'
+import { Address } from '@/lib/api/types/common.types'
 
-interface Token {
-  address: string
-  name: string
-  symbol: string
-  description?: string
-  imageUrl?: string
-  website?: string
-  twitter?: string
-  telegram?: string
-  creator: string
-  bondingCurve: string
-  migrated: boolean
-  migratedAt?: string
-  dexPair?: string
-  totalSupply: string
-  soldSupply: string
-  marketCap: string
-  volume24h: string
-  volume7d: string
-  volumeTotal: string
-  holders: number
-  trades: number
-  createdAt: string
-  progress: number
-}
-
-interface TokensResponse {
-  success: boolean
-  data: {
-    tokens: Token[]
-    pagination: {
-      page: number
-      limit: number
-      total: number
-      pages: number
-    }
-  }
-}
-
-interface UseTokensParams {
-  page?: number
-  limit?: number
-  sort?: 'created' | 'volume' | 'marketCap' | 'holders'
-  order?: 'asc' | 'desc'
-  creator?: string
-  migrated?: boolean
-  search?: string
-}
-
-async function fetchTokens(params: UseTokensParams): Promise<TokensResponse> {
-  const searchParams = new URLSearchParams()
-  
-  if (params.page) searchParams.set('page', params.page.toString())
-  if (params.limit) searchParams.set('limit', params.limit.toString())
-  if (params.sort) searchParams.set('sort', params.sort)
-  if (params.order) searchParams.set('order', params.order)
-  if (params.creator) searchParams.set('creator', params.creator)
-  if (params.migrated !== undefined) searchParams.set('migrated', params.migrated.toString())
-  if (params.search) searchParams.set('search', params.search)
-
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
-  const response = await fetch(`${apiUrl}/api/tokens?${searchParams}`)
-  
-  if (!response.ok) {
-    throw new Error('Failed to fetch tokens')
-  }
-  
-  return response.json()
-}
-
-export function useTokens(params: UseTokensParams = {}) {
-  return useQuery({
+export function useTokens(params: GetTokensParams = {}) {
+  return useQuery<GetTokensResponse, Error>({
     queryKey: ['tokens', params],
-    queryFn: () => fetchTokens(params),
+    queryFn: () => tokensService.getTokens(params),
     staleTime: 1000 * 60 * 5, // 5 minutes
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   })
 }
 
 // Hook for fetching a single token
-export function useToken(address: string) {
-  return useQuery({
+export function useToken(address: Address | undefined) {
+  return useQuery<TokenDetails, Error>({
     queryKey: ['token', address],
-    queryFn: async () => {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
-      const response = await fetch(`${apiUrl}/api/tokens/${address}`)
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch token')
-      }
-      
-      return response.json()
-    },
+    queryFn: () => tokensService.getTokenDetails(address!),
     enabled: !!address,
     staleTime: 1000 * 60 * 2, // 2 minutes
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   })
+}
+
+// Hook for fetching trending tokens
+export function useTrendingTokens(limit: number = 10) {
+  return useQuery<GetTokensResponse, Error>({
+    queryKey: ['tokens', 'trending', limit],
+    queryFn: () => tokensService.getTrendingTokens(limit),
+    staleTime: 1000 * 60 * 2, // 2 minutes
+    retry: 3,
+  })
+}
+
+// Hook for fetching recent tokens
+export function useRecentTokens(limit: number = 10) {
+  return useQuery<GetTokensResponse, Error>({
+    queryKey: ['tokens', 'recent', limit],
+    queryFn: () => tokensService.getRecentTokens(limit),
+    staleTime: 1000 * 60 * 2, // 2 minutes
+    retry: 3,
+  })
+}
+
+// Hook for searching tokens
+export function useSearchTokens(query: string, limit: number = 10) {
+  return useQuery<GetTokensResponse, Error>({
+    queryKey: ['tokens', 'search', query, limit],
+    queryFn: () => tokensService.searchTokens(query, limit),
+    enabled: !!query && query.length > 0,
+    staleTime: 1000 * 60 * 2, // 2 minutes
+    retry: 2,
+  })
+}
+
+// Hook for fetching tokens by creator
+export function useTokensByCreator(creator: Address | undefined, params?: Omit<GetTokensParams, 'creator'>) {
+  return useQuery<GetTokensResponse, Error>({
+    queryKey: ['tokens', 'creator', creator, params],
+    queryFn: () => tokensService.getTokensByCreator(creator!, params),
+    enabled: !!creator,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    retry: 3,
+  })
+}
+
+// Hook for prefetching tokens
+export function usePrefetchTokens() {
+  const queryClient = useQueryClient()
+  
+  return (params: GetTokensParams = {}) => {
+    return queryClient.prefetchQuery({
+      queryKey: ['tokens', params],
+      queryFn: () => tokensService.getTokens(params),
+      staleTime: 1000 * 60 * 5, // 5 minutes
+    })
+  }
+}
+
+// Hook for prefetching a single token
+export function usePrefetchToken() {
+  const queryClient = useQueryClient()
+  
+  return (address: Address) => {
+    return queryClient.prefetchQuery({
+      queryKey: ['token', address],
+      queryFn: () => tokensService.getTokenDetails(address),
+      staleTime: 1000 * 60 * 2, // 2 minutes
+    })
+  }
 }

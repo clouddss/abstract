@@ -16,12 +16,34 @@ const app = express();
 app.use(helmet());
 
 // CORS configuration
-app.use(cors({
-  origin: appConfig.CORS_ORIGIN === '*' ? true : appConfig.CORS_ORIGIN.split(','),
+const corsOptions: cors.CorsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, Postman, etc) in development
+    if (!origin && appConfig.NODE_ENV === 'development') {
+      return callback(null, true);
+    }
+    
+    // Handle wildcard
+    if (appConfig.CORS_ORIGIN === '*') {
+      return callback(null, true);
+    }
+    
+    // Check against allowed origins
+    const allowedOrigins = appConfig.CORS_ORIGIN.split(',').map(o => o.trim());
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-wallet-signature']
-}));
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-wallet-signature', 'x-api-key'],
+  exposedHeaders: ['x-total-count', 'x-page-count'],
+  maxAge: 86400 // 24 hours
+};
+
+app.use(cors(corsOptions));
 
 // Rate limiting
 const limiter = rateLimit({

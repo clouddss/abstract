@@ -1,4 +1,4 @@
-# Abstract Pump Platform
+# Blast Abstract Platform
 
 A complete Pump.fun-style token launch and trading platform built for the Abstract blockchain (EVM L2). Features bonding curve mechanism, platform fees, rewards distribution, and automated DEX migration.
 

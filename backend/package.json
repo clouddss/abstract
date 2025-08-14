@@ -12,6 +12,8 @@
     "migrate": "npx prisma migrate dev",
     "generate": "npx prisma generate",
     "db:seed": "ts-node src/database/seed.ts",
+    "test:seed": "tsx src/scripts/seed-test-data.ts",
+    "db:reset": "npx prisma migrate reset --force",
     "test": "jest",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix"
