@@ -161,7 +161,7 @@ contract BondingCurve is IBondingCurve, ReentrancyGuard, Ownable {
         soldSupply += tokenAmount;
 
         // Transfer tokens to buyer
-        require(token.transfer(msg.sender, tokenAmount), "Token transfer failed");
+        IERC20(address(token)).safeTransfer(msg.sender, tokenAmount);
 
         // Distribute fees
         _distributeFees(totalFees);
@@ -198,7 +198,7 @@ contract BondingCurve is IBondingCurve, ReentrancyGuard, Ownable {
         soldSupply -= tokenAmount;
 
         // Transfer tokens from seller
-        token.safeTransferFrom(msg.sender, address(this), tokenAmount);
+        IERC20(address(token)).safeTransferFrom(msg.sender, address(this), tokenAmount);
 
         // Transfer ETH to seller
         (bool success, ) = msg.sender.call{value: ethAmount}("");
