@@ -1,3 +1,6 @@
 node_modules
 /.claude
 /backend/dist
+/frontend/.next
+frontend/next-env.d.ts
+frontend/package-lock.json
