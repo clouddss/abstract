@@ -66,12 +66,17 @@ async function main() {
       factoryAddress = "0x0000000000000000000000000000000000000000"; // placeholder
     }
 
-    // 4. Deploy RewardsVault (no constructor parameters based on the contract)
+    // 4. Deploy RewardsVault (needs 4 constructor parameters)
     console.log("\n4️⃣ Deploying RewardsVault...");
     let vaultAddress;
     try {
       const RewardsVault = await ethers.getContractFactory("RewardsVault");
-      const rewardsVault = await RewardsVault.deploy();
+      const rewardsVault = await RewardsVault.deploy(
+        deployer.address,     // owner
+        deployer.address,     // platformRouter (placeholder - will be updated)
+        deployer.address,     // snapshotOracle
+        deployer.address      // usdcToken (placeholder for testnet)
+      );
       await rewardsVault.waitForDeployment();
       vaultAddress = await rewardsVault.getAddress();
       console.log("✅ RewardsVault deployed to:", vaultAddress);
@@ -81,15 +86,19 @@ async function main() {
       vaultAddress = "0x0000000000000000000000000000000000000000"; // placeholder
     }
 
-    // 5. Deploy PlatformRouter
+    // 5. Deploy PlatformRouter (needs 5 constructor parameters)
     console.log("\n5️⃣ Deploying PlatformRouter...");
     let routerAddress;
     try {
       const PlatformRouter = await ethers.getContractFactory("PlatformRouter");
       const uniswapV2Router = "0x96ff7D9dbf52FdcAe79157d3b249282c7FABd409"; // Abstract testnet Uniswap V2
+      const uniswapV3Router = "0xb9D4347d129a83cBC40499Cd4fF223dE172a70dF"; // Abstract testnet Uniswap V3
       const platformRouter = await PlatformRouter.deploy(
-        uniswapV2Router,      // uniswap V2 router address
-        deployer.address      // platform treasury
+        deployer.address,      // owner
+        deployer.address,      // platform treasury
+        vaultAddress || deployer.address,  // rewards vault (use vault if deployed, else placeholder)
+        uniswapV2Router,       // uniswap V2 router address
+        uniswapV3Router        // uniswap V3 router address
       );
       await platformRouter.waitForDeployment();
       routerAddress = await platformRouter.getAddress();
