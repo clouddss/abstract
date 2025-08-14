@@ -218,7 +218,7 @@ contract RewardsVault is Ownable, ReentrancyGuard {
         uint256 ethAmount,
         uint256 usdcAmount,
         bytes32[] calldata merkleProof
-    ) external nonReentrant {
+    ) public nonReentrant {
         require(epochRewards[epoch].finalized, "Epoch not finalized");
         require(block.timestamp <= epochRewards[epoch].claimDeadline, "Claim deadline passed");
         require(!epochRewards[epoch].claimed[msg.sender], "Already claimed");
