@@ -86,28 +86,28 @@ export default function HomePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <StatsCard
               title="Total Tokens"
-              value={stats?.overview.totalTokens.toLocaleString() || '0'}
+              value={stats?.data?.overview?.totalTokens?.toLocaleString() || '0'}
               change="+12%"
               icon={<Rocket className="w-5 h-5" />}
               loading={statsLoading}
             />
             <StatsCard
               title="Total Volume"
-              value={`${parseFloat(stats?.overview.totalVolume || '0').toFixed(2)} ETH`}
+              value={`${parseFloat(stats?.data?.overview?.totalVolume || '0').toFixed(2)} ETH`}
               change="+8%"
               icon={<DollarSign className="w-5 h-5" />}
               loading={statsLoading}
             />
             <StatsCard
               title="Active Traders"
-              value={stats?.overview.uniqueTraders.toLocaleString() || '0'}
+              value={stats?.data?.overview?.uniqueTraders?.toLocaleString() || '0'}
               change="+15%"
               icon={<Users className="w-5 h-5" />}
               loading={statsLoading}
             />
             <StatsCard
               title="Migration Rate"
-              value={`${stats?.overview.migrationRate.toFixed(1) || '0'}%`}
+              value={`${(stats?.data?.overview?.migrationRate || 0).toFixed(1)}%`}
               change="+3%"
               icon={<TrendingUp className="w-5 h-5" />}
               loading={statsLoading}
@@ -150,13 +150,13 @@ export default function HomePage() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {tokens?.tokens.map((token) => (
+                  {tokens?.data?.tokens?.map((token: any) => (
                     <TokenCard key={token.address} token={token} />
                   ))}
                 </div>
               )}
 
-              {tokens?.tokens.length === 0 && !tokensLoading && (
+              {tokens?.data?.tokens?.length === 0 && !tokensLoading && (
                 <div className="text-center py-12">
                   <p className="text-gray-500 dark:text-gray-400">No tokens found</p>
                 </div>
