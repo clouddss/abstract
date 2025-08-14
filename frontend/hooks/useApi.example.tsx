@@ -118,7 +118,7 @@ export function useTrade() {
         console.log('Trade status:', status);
         if (status.status === 'success') {
           // Invalidate relevant queries
-          queryClient.invalidateQueries({ queryKey: ['token', status.trade?.tokenAddress] });
+          queryClient.invalidateQueries({ queryKey: ['tokens'] });
           queryClient.invalidateQueries({ queryKey: ['user-trades'] });
         }
       });
