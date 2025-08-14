@@ -16,7 +16,7 @@ import {
   AlertCircle
 } from 'lucide-react'
 import { useAccount } from 'wagmi'
-import { useRewards, useRewardHistory, useClaimRewards } from '@/hooks/useRewards'
+import { useRewards, useClaimedRewards, useClaimRewards } from '@/hooks/useRewards'
 import { formatETH, formatTimestamp } from '@/lib/utils/format'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
@@ -28,7 +28,7 @@ export default function RewardsPage() {
   
   // Fetch rewards data
   const { data: rewards, isLoading: rewardsLoading, error: rewardsError } = useRewards(address)
-  const { data: history, isLoading: historyLoading } = useRewardHistory(address)
+  const { data: history, isLoading: historyLoading } = useClaimedRewards(address)
   const claimRewards = useClaimRewards()
   
   const handleClaimRewards = async () => {
