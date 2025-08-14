@@ -32,10 +32,20 @@ export default function RewardsPage() {
   const claimRewards = useClaimRewards()
   
   const handleClaimRewards = async () => {
-    if (!rewards?.claimable || rewards.claimable === '0') return
+    if (!rewards?.summary || (rewards.summary.unclaimedEth === '0' && rewards.summary.unclaimedUsdc === '0')) return
+    
+    // Find the first unclaimed reward
+    const unclaimedReward = rewards.rewards.find(r => !r.claimed)
+    if (!unclaimedReward || !address) return
     
     try {
-      await claimRewards.mutateAsync()
+      await claimRewards.mutateAsync({
+        epochNumber: unclaimedReward.epochNumber,
+        ethAmount: unclaimedReward.ethAmount,
+        usdcAmount: unclaimedReward.usdcAmount,
+        merkleProof: [], // This should come from the backend
+        signature: '' // This needs to be generated
+      })
       toast.success('Rewards claimed successfully!')
     } catch (error) {
       toast.error('Failed to claim rewards')
@@ -94,7 +104,7 @@ export default function RewardsPage() {
                     <Skeleton className="h-8 w-24" />
                   ) : (
                     <span className="text-2xl font-bold gradient-text">
-                      {formatETH(rewards?.totalEarned || '0')} ETH
+                      {formatETH(rewards?.summary?.totalEth || '0')} ETH
                     </span>
                   )}
                 </div>
@@ -111,7 +121,7 @@ export default function RewardsPage() {
                     <Skeleton className="h-8 w-24" />
                   ) : (
                     <span className="text-2xl font-bold text-blue-400">
-                      {formatETH(rewards?.pending || '0')} ETH
+                      {formatETH(rewards?.summary?.totalEth || '0')} ETH
                     </span>
                   )}
                 </div>
@@ -128,7 +138,7 @@ export default function RewardsPage() {
                     <Skeleton className="h-8 w-24" />
                   ) : (
                     <span className="text-2xl font-bold text-green-400">
-                      {formatETH(rewards?.claimable || '0')} ETH
+                      {formatETH(rewards?.summary?.unclaimedEth || '0')} ETH
                     </span>
                   )}
                 </div>
@@ -145,7 +155,7 @@ export default function RewardsPage() {
                     <Skeleton className="h-8 w-16" />
                   ) : (
                     <span className="text-2xl font-bold text-purple-400">
-                      #{rewards?.rank || 0}
+                      #{rewards?.rewards?.length || 0}
                     </span>
                   )}
                 </div>
@@ -160,12 +170,12 @@ export default function RewardsPage() {
                 <div>
                   <h3 className="text-xl font-semibold mb-2">Claim Rewards</h3>
                   <p className="text-muted-foreground">
-                    You have {formatETH(rewards?.claimable || '0')} ETH available to claim
+                    You have {formatETH(rewards?.summary?.unclaimedEth || '0')} ETH available to claim
                   </p>
                 </div>
                 <Button 
                   className="btn-gradient px-6 py-3"
-                  disabled={!isConnected || !rewards?.claimable || rewards.claimable === '0' || claimRewards.isPending}
+                  disabled={!isConnected || !rewards?.summary || (rewards.summary.unclaimedEth === '0' && rewards.summary.unclaimedUsdc === '0') || claimRewards.isPending}
                   onClick={handleClaimRewards}
                 >
                   {claimRewards.isPending ? (
@@ -176,7 +186,7 @@ export default function RewardsPage() {
                   ) : (
                     <>
                       <Download className="h-4 w-4 mr-2" />
-                      Claim {formatETH(rewards?.claimable || '0')} ETH
+                      Claim {formatETH(rewards?.summary?.unclaimedEth || '0')} ETH
                     </>
                   )}
                 </Button>
@@ -193,7 +203,7 @@ export default function RewardsPage() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">This Week</span>
-                    <span className="font-semibold">{formatETH(rewards?.weeklyEarnings || '0')} ETH</span>
+                    <span className="font-semibold">{formatETH(rewards?.summary?.totalEth || '0')} ETH</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">Multiplier</span>
@@ -312,8 +322,8 @@ export default function RewardsPage() {
               Array.from({ length: 3 }).map((_, i) => (
                 <Skeleton key={i} className="h-32 w-full" />
               ))
-            ) : rewards?.positions && rewards.positions.length > 0 ? (
-              rewards.positions.map((position) => (
+            ) : rewards?.rewards && rewards.rewards.length > 0 ? (
+              rewards.rewards.filter(r => !r.claimed).map((position) => (
                 <div key={position.tokenAddress} className="glass-card rounded-lg p-6">
                   <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
                     <div className="flex-1">
