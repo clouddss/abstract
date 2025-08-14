@@ -18,13 +18,13 @@ import { formatETH, formatNumber, isValidETHAmount, parseETHToWei } from '@/lib/
 import { formatError } from '@/lib/utils/ui'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { useEstimateTrade, useExecuteTrade, useSlippage } from '@/hooks/useTrades'
-import { TradeType } from '@/lib/api/types/common.types'
+import { TradeType, Address } from '@/lib/api/types/common.types'
 import { toast } from 'sonner'
 import { useErrorHandler, getTransactionErrorMessage } from '@/lib/utils/error-handling'
 
 interface TradingInterfaceProps {
   tokenSymbol: string
-  tokenAddress: string
+  tokenAddress: Address
   currentPrice: string
   bondingCurve?: string
   className?: string
