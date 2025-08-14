@@ -108,7 +108,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </Button>
 
               <Link href="/">
-                <Button variant="primary" size="sm" className="gap-2">
+                <Button variant="default" size="sm" className="gap-2">
                   <Home className="w-4 h-4" />
                   Go Home
                 </Button>
