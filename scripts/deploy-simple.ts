@@ -1,4 +1,4 @@
-import { ethers } from "hardhat";
+import { ethers, network, run } from "hardhat";
 
 async function main() {
   console.log("🚀 Starting simple deployment to Abstract testnet...");
@@ -26,9 +26,11 @@ async function main() {
     };
     
     const baseToken = await BaseToken.deploy(
-      metadata,
+      "Test Token",     // name
+      "TEST",          // symbol
+      metadata,        // metadata struct
       deployer.address, // creator
-      "1000000000000000000000000000" // 1 billion tokens
+      deployer.address  // bondingCurve (using deployer as placeholder)
     );
     
     await baseToken.waitForDeployment();
