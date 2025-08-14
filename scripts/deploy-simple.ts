@@ -10,23 +10,10 @@ async function main() {
   console.log("💰 Balance:", ethers.formatEther(balance), "ETH\n");
 
   try {
-    // Deploy contracts in the correct order to handle circular dependencies
+    // Deploy contracts in the correct order
     
-    // 1. Deploy BondingCurve first with address(0) as token parameter
-    console.log("1️⃣ Deploying BondingCurve (with placeholder token address)...");
-    const BondingCurve = await ethers.getContractFactory("BondingCurve");
-    const bondingCurve = await BondingCurve.deploy(
-      ethers.ZeroAddress,   // token address (placeholder - will be updated)
-      deployer.address,     // creator
-      deployer.address,     // factory (using deployer as placeholder)
-      deployer.address      // platform treasury
-    );
-    await bondingCurve.waitForDeployment();
-    const bondingCurveAddress = await bondingCurve.getAddress();
-    console.log("✅ BondingCurve deployed to:", bondingCurveAddress);
-
-    // 2. Deploy BaseToken with the bonding curve address
-    console.log("\n2️⃣ Deploying BaseToken...");
+    // 1. Deploy BaseToken first (we'll use deployer as bonding curve initially)
+    console.log("1️⃣ Deploying BaseToken...");
     const BaseToken = await ethers.getContractFactory("BaseToken");
     
     const metadata = {
@@ -42,19 +29,27 @@ async function main() {
       "TEST",              // symbol
       metadata,            // metadata struct
       deployer.address,    // creator
-      bondingCurveAddress  // bondingCurve address
+      deployer.address     // bondingCurve address (temporary - using deployer)
     );
     await baseToken.waitForDeployment();
     const tokenAddress = await baseToken.getAddress();
     console.log("✅ BaseToken deployed to:", tokenAddress);
 
-    // 3. Update BondingCurve with the correct token address
-    console.log("\n3️⃣ Updating BondingCurve with token address...");
-    await bondingCurve.updateTokenAddress(tokenAddress);
-    console.log("✅ BondingCurve token address updated");
+    // 2. Deploy BondingCurve with the real token address
+    console.log("\n2️⃣ Deploying BondingCurve...");
+    const BondingCurve = await ethers.getContractFactory("BondingCurve");
+    const bondingCurve = await BondingCurve.deploy(
+      tokenAddress,         // token address from step 1
+      deployer.address,     // creator
+      deployer.address,     // factory (using deployer as placeholder)
+      deployer.address      // platform treasury
+    );
+    await bondingCurve.waitForDeployment();
+    const bondingCurveAddress = await bondingCurve.getAddress();
+    console.log("✅ BondingCurve deployed to:", bondingCurveAddress);
 
-    // 4. Deploy LaunchFactory
-    console.log("\n4️⃣ Deploying LaunchFactory...");
+    // 3. Deploy LaunchFactory
+    console.log("\n3️⃣ Deploying LaunchFactory...");
     const LaunchFactory = await ethers.getContractFactory("LaunchFactory");
     const launchFactory = await LaunchFactory.deploy(
       deployer.address,     // owner
@@ -64,58 +59,40 @@ async function main() {
     const factoryAddress = await launchFactory.getAddress();
     console.log("✅ LaunchFactory deployed to:", factoryAddress);
 
-    // 5. Deploy RewardsVault first (it needs platform router but we can update it later)
-    console.log("\n5️⃣ Deploying RewardsVault...");
+    // 4. Deploy RewardsVault (no constructor parameters based on the contract)
+    console.log("\n4️⃣ Deploying RewardsVault...");
     const RewardsVault = await ethers.getContractFactory("RewardsVault");
-    const rewardsVault = await RewardsVault.deploy(
-      deployer.address,     // owner
-      deployer.address,     // platform router (temporary - will update)
-      deployer.address,     // snapshot oracle
-      deployer.address      // USDC token (using deployer as placeholder for testnet)
-    );
+    const rewardsVault = await RewardsVault.deploy();
     await rewardsVault.waitForDeployment();
     const vaultAddress = await rewardsVault.getAddress();
     console.log("✅ RewardsVault deployed to:", vaultAddress);
 
-    // 6. Deploy PlatformRouter with RewardsVault address
-    console.log("\n6️⃣ Deploying PlatformRouter...");
+    // 5. Deploy PlatformRouter
+    console.log("\n5️⃣ Deploying PlatformRouter...");
     const PlatformRouter = await ethers.getContractFactory("PlatformRouter");
+    const uniswapV2Router = "0x96ff7D9dbf52FdcAe79157d3b249282c7FABd409"; // Abstract testnet Uniswap V2
     const platformRouter = await PlatformRouter.deploy(
-      deployer.address,     // owner
-      deployer.address,     // platform treasury
-      vaultAddress,         // rewards vault
-      deployer.address,     // uniswap V2 router (using deployer as placeholder for testnet)
-      deployer.address      // uniswap V3 router (using deployer as placeholder for testnet)
+      uniswapV2Router,      // uniswap V2 router address
+      deployer.address      // platform treasury
     );
     await platformRouter.waitForDeployment();
     const routerAddress = await platformRouter.getAddress();
     console.log("✅ PlatformRouter deployed to:", routerAddress);
 
-    // 7. Update RewardsVault with correct PlatformRouter address
-    console.log("\n7️⃣ Updating RewardsVault with correct PlatformRouter address...");
-    await rewardsVault.updatePlatformRouter(routerAddress);
-    console.log("✅ RewardsVault updated with correct PlatformRouter address");
-
     console.log("\n🎉 All contracts deployed successfully!");
     console.log("\n=================================");
     console.log("DEPLOYED CONTRACTS:");
     console.log("=================================");
-    console.log(`Network: ${network.name} (chainId: ${(await ethers.provider.getNetwork()).chainId})`);
-    console.log(`Deployer: ${deployer.address}`);
-    console.log("");
-    console.log(`BONDING_CURVE=${bondingCurveAddress}`);
     console.log(`BASE_TOKEN=${tokenAddress}`);
+    console.log(`BONDING_CURVE=${bondingCurveAddress}`);
     console.log(`LAUNCH_FACTORY=${factoryAddress}`);
-    console.log(`PLATFORM_ROUTER=${routerAddress}`);
     console.log(`REWARDS_VAULT=${vaultAddress}`);
+    console.log(`PLATFORM_ROUTER=${routerAddress}`);
     console.log("=================================");
-    console.log("");
-    console.log("📋 Configuration Summary:");
-    console.log(`- BondingCurve is linked to BaseToken: ${tokenAddress}`);
-    console.log(`- BaseToken mints to BondingCurve: ${bondingCurveAddress}`);
-    console.log(`- LaunchFactory treasury: ${deployer.address}`);
-    console.log(`- PlatformRouter treasury: ${deployer.address}`);
-    console.log(`- RewardsVault oracle: ${deployer.address}`);
+    console.log("\n📋 Add these to your backend/.env file:");
+    console.log(`LAUNCH_FACTORY_ADDRESS=${factoryAddress}`);
+    console.log(`PLATFORM_ROUTER_ADDRESS=${routerAddress}`);
+    console.log(`REWARDS_VAULT_ADDRESS=${vaultAddress}`);
     console.log("=================================\n");
 
   } catch (error: any) {
