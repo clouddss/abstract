@@ -4,6 +4,7 @@ import { Activity, TrendingUp, TrendingDown, AlertCircle } from 'lucide-react'
 import { useTrades } from '@/hooks/useTrades'
 import { formatETH, formatAddress, formatTimestamp } from '@/lib/utils/format'
 import { Skeleton } from './ui/skeleton'
+import { TradeType } from '@/lib/api/types/common.types'
 
 interface RecentTradesProps {
   tokenAddress?: string
@@ -62,11 +63,11 @@ export function RecentTrades({ tokenAddress, limit = 5 }: RecentTradesProps) {
             >
               <div className="flex items-center space-x-3">
                 <div className={`w-2 h-2 rounded-full ${
-                  trade.type === 'buy' ? 'bg-green-500' : 'bg-red-500'
+                  trade.type === TradeType.BUY ? 'bg-green-500' : 'bg-red-500'
                 }`} />
                 <div>
                   <p className="text-sm font-medium text-gray-900 flex items-center">
-                    {trade.type === 'buy' ? (
+                    {trade.type === TradeType.BUY ? (
                       <>
                         <TrendingUp className="w-3 h-3 mr-1 text-green-500" />
                         Bought
