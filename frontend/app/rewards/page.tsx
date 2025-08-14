@@ -207,16 +207,16 @@ export default function RewardsPage() {
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">Multiplier</span>
-                    <span className="text-primary font-semibold">{rewards?.multiplier || 1}x</span>
+                    <span className="text-primary font-semibold">1x</span>
                   </div>
                   <div className="w-full bg-secondary rounded-full h-2">
                     <div 
                       className="progress-bar h-2 rounded-full" 
-                      style={{ width: '67%' }}
+                      style={{ width: '50%' }}
                     />
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    67% to next multiplier tier
+                    Progress to next tier
                   </p>
                 </div>
               </div>
