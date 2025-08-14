@@ -13,7 +13,7 @@ export function useStats(timeframe: '24h' | '7d' | '30d' = '24h') {
     queryFn: () => statsService.getPlatformStats({ timeframe }),
     staleTime: 1000 * 60 * 5, // 5 minutes
     retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 30000),
   })
 }
 
@@ -24,7 +24,7 @@ export function useLeaderboards(timeframe: '24h' | '7d' | '30d' = '24h', limit: 
     queryFn: () => statsService.getLeaderboards({ timeframe, limit }),
     staleTime: 1000 * 60 * 5, // 5 minutes
     retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 30000),
   })
 }
 
@@ -35,7 +35,7 @@ export function useChartData(metric: ChartMetric = 'volume', timeframe: '24h' | 
     queryFn: () => statsService.getChartData({ metric, timeframe }),
     staleTime: 1000 * 60 * 2, // 2 minutes
     retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    retryDelay: (attemptIndex: number ) => Math.min(1000 * 2 ** attemptIndex, 30000),
   })
 }
 

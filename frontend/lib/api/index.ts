@@ -1,3 +1,7 @@
+// Import services for internal use
+import { authService as authServiceInstance } from './services/auth.service';
+import { ApiClientError } from './client';
+
 // Export client
 export { apiClient, ApiClient, ApiClientError } from './client';
 export type { ApiResponse, ApiError } from './client';
@@ -14,13 +18,7 @@ export * from './types/common.types';
 export * from './types/token.types';
 export * from './types/reward.types';
 export * from './types/stats.types';
-
-// Export specific service types
-export type {
-  AuthRequest,
-  AuthResponse,
-  VerifyResponse,
-} from './services/auth.service';
+export * from './types/auth.types';
 
 export type {
   EstimateTradeRequest,
@@ -49,7 +47,7 @@ export { TradeType, ChartInterval } from './types/common.types';
 export async function initializeApi(): Promise<boolean> {
   try {
     // Initialize auth from stored token
-    const authInitialized = await authService.initializeAuth();
+    const authInitialized = await authServiceInstance.initializeAuth();
     
     if (authInitialized) {
       console.log('API client initialized with authentication');

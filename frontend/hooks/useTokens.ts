@@ -9,7 +9,7 @@ export function useTokens(params: GetTokensParams = {}) {
     queryFn: () => tokensService.getTokens(params),
     staleTime: 1000 * 60 * 5, // 5 minutes
     retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 30000),
   })
 }
 
@@ -21,7 +21,7 @@ export function useToken(address: Address | undefined) {
     enabled: !!address,
     staleTime: 1000 * 60 * 2, // 2 minutes
     retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    retryDelay: (attemptIndex: number ) => Math.min(1000 * 2 ** attemptIndex, 30000),
   })
 }
 

@@ -73,43 +73,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     initAuth()
   }, [address])
 
-  // Auto-authenticate when wallet connects
-  useEffect(() => {
-    if (isConnected && address && !isAuthenticated && !isAuthenticating) {
-      // Give user a moment to see they're connected before prompting to sign
-      const timer = setTimeout(() => {
-        authenticate()
-      }, 500)
-      
-      return () => clearTimeout(timer)
-    }
-  }, [isConnected, address, isAuthenticated, isAuthenticating])
-
-  // Handle wallet disconnection
-  useEffect(() => {
-    if (!isConnected && !address) {
-      // Wallet was disconnected, clear auth state
-      disconnect()
-    }
-  }, [isConnected, address, disconnect])
-
-  // Listen for auth events
-  useEffect(() => {
-    const unsubscribeLogout = authEvents.on('logout', () => {
-      setIsAuthenticated(false)
-      tokenStorage.clear()
-    })
-
-    const unsubscribeLogin = authEvents.on('login', () => {
-      setIsAuthenticated(true)
-    })
-
-    return () => {
-      unsubscribeLogout()
-      unsubscribeLogin()
-    }
-  }, [])
-
+  // Define authenticate function before using it in useEffect
   const authenticate = useCallback(async () => {
     if (!address || !signMessageAsync) {
       setAuthError('No wallet connected')
@@ -177,7 +141,60 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsAuthenticating(false)
     }
-  }, [address, signMessageAsync, chainId, queryClient])
+  }, [address, signMessageAsync, chainId, queryClient, switchChainAsync])
+
+  const switchToAbstract = useCallback(async () => {
+    if (!switchChainAsync) return
+    
+    try {
+      await switchChainAsync({ chainId: ABSTRACT_TESTNET_ID })
+    } catch (error: any) {
+      console.error('Failed to switch chain:', error)
+      throw new Error('Please switch to Abstract Testnet in your wallet')
+    }
+  }, [switchChainAsync])
+
+  // Auto-authenticate when wallet connects
+  useEffect(() => {
+    if (isConnected && address && !isAuthenticated && !isAuthenticating) {
+      // Give user a moment to see they're connected before prompting to sign
+      const timer = setTimeout(() => {
+        authenticate()
+      }, 500)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [isConnected, address, isAuthenticated, isAuthenticating, authenticate])
+
+  // Handle wallet disconnection
+  useEffect(() => {
+    if (!isConnected && !address) {
+      // Wallet was disconnected, clear auth state
+      // Clear auth state without calling disconnect
+      tokenStorage.clear()
+      setIsAuthenticated(false)
+      setAuthError(null)
+      queryClient.clear()
+      authEvents.emit('logout')
+    }
+  }, [isConnected, address, queryClient])
+
+  // Listen for auth events
+  useEffect(() => {
+    const unsubscribeLogout = authEvents.on('logout', () => {
+      setIsAuthenticated(false)
+      tokenStorage.clear()
+    })
+
+    const unsubscribeLogin = authEvents.on('login', () => {
+      setIsAuthenticated(true)
+    })
+
+    return () => {
+      unsubscribeLogout()
+      unsubscribeLogin()
+    }
+  }, [])
 
   const disconnect = useCallback(async () => {
     try {
@@ -201,17 +218,6 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       authEvents.emit('logout')
     }
   }, [queryClient])
-
-  const switchToAbstract = useCallback(async () => {
-    if (!switchChainAsync) return
-    
-    try {
-      await switchChainAsync({ chainId: ABSTRACT_TESTNET_ID })
-    } catch (error: any) {
-      console.error('Failed to switch chain:', error)
-      throw new Error('Please switch to Abstract Testnet in your wallet')
-    }
-  }, [switchChainAsync])
 
   const value: WalletContextValue = {
     // Wallet state

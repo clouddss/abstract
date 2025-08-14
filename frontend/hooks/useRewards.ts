@@ -21,7 +21,7 @@ export function useRewards(wallet: Address | undefined, params?: GetRewardsParam
     enabled: !!wallet,
     staleTime: 1000 * 60 * 2, // 2 minutes
     retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 30000),
   })
 }
 
@@ -53,10 +53,10 @@ export function useClaimRewards() {
   
   return useMutation<ClaimRewardsResponse, Error, ClaimRewardsRequest>({
     mutationFn: (data) => rewardsService.claimRewards(data),
-    onSuccess: (_, variables) => {
-      // Invalidate rewards queries for the wallet
+    onSuccess: () => {
+      // Invalidate all rewards queries since claiming affects data
       queryClient.invalidateQueries({ 
-        queryKey: ['rewards', variables.wallet] 
+        queryKey: ['rewards'] 
       })
       // Invalidate leaderboard as rankings might change
       queryClient.invalidateQueries({ 

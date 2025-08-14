@@ -152,7 +152,6 @@ axiosInstance.interceptors.response.use(
 
     // Extract error message
     const errorMessage = error.response.data?.error || 
-                        error.response.data?.message || 
                         'An unexpected error occurred';
 
     throw new ApiClientError(

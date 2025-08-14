@@ -9,18 +9,17 @@ import {
   GetChartsResponse,
   ChartMetric
 } from '@/lib/api/types/stats.types'
-import { Address } from '@/lib/api/types/common.types'
+import { Address, ChartInterval } from '@/lib/api/types/common.types'
 
 // Hook for fetching token price chart data
 export function useTokenChart(
   address: Address | undefined, 
   params?: GetTokenChartParams
 ) {
-  const timeframe = params?.timeframe || '24h'
-  const interval = params?.interval || '1h'
+  const interval = params?.interval || ChartInterval.ONE_HOUR
   
   return useQuery<TokenChartResponse, Error>({
-    queryKey: ['chart', 'token', address, timeframe, interval],
+    queryKey: ['chart', 'token', address, interval, params?.from, params?.to],
     queryFn: () => tokensService.getTokenChart(address!, params),
     enabled: !!address,
     staleTime: 1000 * 60 * 2, // 2 minutes
@@ -101,11 +100,10 @@ export function usePrefetchTokenChart() {
   const queryClient = useQueryClient()
   
   return (address: Address, params?: GetTokenChartParams) => {
-    const timeframe = params?.timeframe || '24h'
-    const interval = params?.interval || '1h'
+    const interval = params?.interval || ChartInterval.ONE_HOUR
     
     return queryClient.prefetchQuery({
-      queryKey: ['chart', 'token', address, timeframe, interval],
+      queryKey: ['chart', 'token', address, interval, params?.from, params?.to],
       queryFn: () => tokensService.getTokenChart(address, params),
       staleTime: 1000 * 60 * 2, // 2 minutes
     })

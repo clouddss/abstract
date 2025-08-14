@@ -13,14 +13,14 @@ import {
 import { 
   GetTokenTradesParams,
   TokenTradesResponse,
-  TokenTrade
+  TokenTrade  
 } from '@/lib/api/types/token.types'
 import { Address } from '@/lib/api/types/common.types'
 import { useEffect, useState } from 'react'
 
 // General hook for fetching trades (token trades or all recent trades)
 export function useTrades(params?: {
-  tokenAddress?: string;
+  tokenAddress?: `0x${string}`;
   limit?: number;
   sort?: string;
   order?: 'asc' | 'desc';
@@ -64,7 +64,7 @@ export function useExecuteTrade() {
   
   return useMutation<ExecuteTradeResponse, Error, ExecuteTradeRequest>({
     mutationFn: (data) => tradesService.executeTrade(data),
-    onSuccess: (_, variables) => {
+    onSuccess: (_, variables: ExecuteTradeRequest) => {
       // Invalidate user trades
       queryClient.invalidateQueries({ 
         queryKey: ['trades', 'user'] 
@@ -97,7 +97,7 @@ export function useTradeStatus(txHash: string | undefined, enabled: boolean = tr
       try {
         const finalStatus = await tradesService.monitorTradeStatus(
           txHash,
-          (status) => setStatus(status),
+          (status: TradeStatus  ) => setStatus(status),
           60, // max 60 attempts
           2000 // 2 second intervals
         )

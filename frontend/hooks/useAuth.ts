@@ -54,10 +54,10 @@ export function useLogin() {
     onSuccess: (response) => {
       // Store tokens
       if (response.accessToken) {
-        localStorage.setItem('accessToken', response.accessToken)
+        localStorage.setItem('auth_token', response.accessToken)
       }
       if (response.refreshToken) {
-        localStorage.setItem('refreshToken', response.refreshToken)
+        localStorage.setItem('refresh_token', response.refreshToken)
       }
       
       // Set user data in cache
@@ -84,10 +84,10 @@ export function useRegister() {
     onSuccess: (response) => {
       // Store tokens if provided
       if (response.accessToken) {
-        localStorage.setItem('accessToken', response.accessToken)
+        localStorage.setItem('auth_token', response.accessToken)
       }
       if (response.refreshToken) {
-        localStorage.setItem('refreshToken', response.refreshToken)
+        localStorage.setItem('refresh_token', response.refreshToken)
       }
       
       // Set user data if available
@@ -114,8 +114,8 @@ export function useLogout() {
     mutationFn: () => authService.logout(),
     onSuccess: () => {
       // Clear tokens
-      localStorage.removeItem('accessToken')
-      localStorage.removeItem('refreshToken')
+      localStorage.removeItem('auth_token')
+      localStorage.removeItem('refresh_token')
       
       // Clear all cached data
       queryClient.clear()
@@ -125,8 +125,8 @@ export function useLogout() {
     },
     onError: () => {
       // Even if logout fails, clear local data
-      localStorage.removeItem('accessToken')
-      localStorage.removeItem('refreshToken')
+      localStorage.removeItem('auth_token')
+      localStorage.removeItem('refresh_token')
       queryClient.clear()
       router.push('/auth/login')
     },
@@ -159,10 +159,10 @@ export function useRefreshToken() {
     onSuccess: (response) => {
       // Update tokens
       if (response.accessToken) {
-        localStorage.setItem('accessToken', response.accessToken)
+        localStorage.setItem('auth_token', response.accessToken)
       }
       if (response.refreshToken) {
-        localStorage.setItem('refreshToken', response.refreshToken)
+        localStorage.setItem('refresh_token', response.refreshToken)
       }
     },
     retry: false,

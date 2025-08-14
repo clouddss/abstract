@@ -113,7 +113,7 @@ export function useWebSocket(
           // Invalidate user rewards if it's the current user
           if (message.data.wallet === user?.address) {
             queryClient.invalidateQueries({ 
-              queryKey: ['rewards', user.address] 
+              queryKey: ['rewards', user?.address] 
             })
           }
           break

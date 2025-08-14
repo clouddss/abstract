@@ -13,7 +13,7 @@ interface RecentTradesProps {
 
 export function RecentTrades({ tokenAddress, limit = 5 }: RecentTradesProps) {
   const { data, isLoading, error } = useTrades({
-    tokenAddress,
+    tokenAddress: tokenAddress as `0x${string}`,
     limit,
     sort: 'timestamp',
     order: 'desc'

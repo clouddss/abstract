@@ -129,7 +129,7 @@ export class TradesService {
   calculateMinimumOutput(expectedOutput: string, slippagePercent: number = 0.5): string {
     const output = BigInt(expectedOutput);
     const slippage = BigInt(Math.floor(slippagePercent * 100)); // Convert to basis points
-    const minOutput = output - (output * slippage) / 10000n;
+    const minOutput = output - (output * slippage) / BigInt(10000);
     return minOutput.toString();
   }
 

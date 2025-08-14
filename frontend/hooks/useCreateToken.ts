@@ -24,22 +24,9 @@ export function useCreateToken() {
         queryKey: ['tokens', 'recent'] 
       })
       
-      // Invalidate creator's tokens if creator address is available
-      if (response.token.creator) {
-        queryClient.invalidateQueries({ 
-          queryKey: ['tokens', 'creator', response.token.creator] 
-        })
-      }
-      
-      // Prefetch the new token details
-      queryClient.prefetchQuery({
-        queryKey: ['token', response.token.address],
-        queryFn: () => tokensService.getTokenDetails(response.token.address),
-        staleTime: 1000 * 60 * 2, // 2 minutes
-      })
-      
-      // Navigate to the token page
-      router.push(`/token/${response.token.address}`)
+      // The CreateTokenResponse only contains estimatedGas and launchFee
+      // We don't have token details in the response, so we can't navigate to a specific token
+      // or invalidate creator's tokens
     },
     retry: 1,
   })
@@ -89,15 +76,6 @@ export function useValidateTokenCreation() {
       errors.telegram = 'Telegram must be a valid Telegram URL'
     }
     
-    // Initial buy validation
-    if (data.initialBuyEth) {
-      const buyAmount = parseFloat(data.initialBuyEth)
-      if (isNaN(buyAmount) || buyAmount < 0) {
-        errors.initialBuyEth = 'Initial buy must be a positive number'
-      } else if (buyAmount > 10) {
-        errors.initialBuyEth = 'Initial buy cannot exceed 10 ETH'
-      }
-    }
     
     return {
       isValid: Object.keys(errors).length === 0,
