@@ -64,15 +64,18 @@ export default function LaunchPage() {
 
     try {
       // Step 1: Get transaction data from backend
+      console.log('Getting transaction data...')
       const launchResponse = await tokensService.launchToken(formData)
+      console.log('Launch response:', launchResponse)
       
       if (!launchResponse.success) {
-        throw new Error('Failed to prepare token launch')
+        throw new Error(launchResponse.error || 'Failed to prepare token launch')
       }
 
       const { to, data, value } = launchResponse.data
 
       // Step 2: Send transaction via wallet (let wallet handle gas estimation)
+      console.log('Sending transaction...', { to, data, value })
       const hash = await walletClient.sendTransaction({
         to: to as `0x${string}`,
         data: data as `0x${string}`,
@@ -102,7 +105,16 @@ export default function LaunchPage() {
       }
     } catch (err: any) {
       console.error('Launch error:', err)
-      setError(err.message || 'Failed to launch token')
+      // Check if it's an API error with more details
+      if (err.data && err.data.error) {
+        setError(err.data.error)
+      } else if (err.data && err.data.details) {
+        // Validation errors
+        const errors = err.data.details.map((d: any) => `${d.field}: ${d.message}`).join(', ')
+        setError(`Validation error: ${errors}`)
+      } else {
+        setError(err.message || 'Failed to launch token')
+      }
     } finally {
       setIsLaunching(false)
     }
