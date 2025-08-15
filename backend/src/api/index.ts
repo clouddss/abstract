@@ -6,6 +6,7 @@ import rateLimit from 'express-rate-limit';
 import { appConfig } from '../config';
 
 // Import routes
+import authRouter from './routes/auth';
 import tokensRouter from './routes/tokens';
 import rewardsRouter from './routes/rewards';
 import statsRouter from './routes/stats';
@@ -80,6 +81,7 @@ app.get('/health', (req, res) => {
 });
 
 // API routes
+app.use('/api/auth', authRouter);
 app.use('/api/tokens', tokensRouter);
 app.use('/api/rewards', rewardsRouter);
 app.use('/api/stats', statsRouter);
@@ -92,6 +94,7 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     documentation: '/api/docs',
     endpoints: {
+      auth: '/api/auth',
       tokens: '/api/tokens',
       rewards: '/api/rewards',
       stats: '/api/stats',

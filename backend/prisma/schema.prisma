@@ -9,6 +9,21 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id            String    @id @default(cuid())
+  address       String    @unique
+  nonce         String?   // For additional security if needed
+  createdAt     DateTime  @default(now())
+  lastActiveAt  DateTime  @default(now())
+  
+  // Relations
+  createdTokens Token[]   @relation("TokenCreator")
+  trades        Trade[]   @relation("UserTrades")
+  rewards       RewardDistribution[] @relation("UserRewards")
+  
+  @@map("users")
+}
+
 model Token {
   id              String   @id @default(cuid())
   address         String   @unique
@@ -20,6 +35,7 @@ model Token {
   twitter         String?
   telegram        String?
   creator         String
+  creatorId       String?
   bondingCurve    String
   migrated        Boolean  @default(false)
   migratedAt      DateTime?
@@ -36,6 +52,7 @@ model Token {
   updatedAt       DateTime @updatedAt
 
   // Relations
+  creatorUser     User?    @relation("TokenCreator", fields: [creatorId], references: [id])
   trades          Trade[]
   holders         Holder[]
   priceData       PriceData[]
@@ -48,6 +65,7 @@ model Trade {
   id            String    @id @default(cuid())
   tokenAddress  String
   trader        String
+  userId        String?
   type          TradeType
   amountIn      String    // ETH amount for buys, token amount for sells
   amountOut     String    // Token amount for buys, ETH amount for sells
@@ -62,6 +80,7 @@ model Trade {
 
   // Relations
   token         Token     @relation(fields: [tokenAddress], references: [address], onDelete: Cascade)
+  user          User?     @relation("UserTrades", fields: [userId], references: [id])
 
   @@map("trades")
   @@index([tokenAddress, timestamp])
@@ -140,6 +159,7 @@ model RewardDistribution {
   epochNumber   Int
   tokenAddress  String
   wallet        String
+  userId        String?
   ethAmount     String   @default("0")
   usdcAmount    String   @default("0")
   weight        String   @default("0") // Weight based on time-weighted balance
@@ -152,6 +172,7 @@ model RewardDistribution {
   // Relations
   epoch         RewardEpoch @relation(fields: [epochNumber], references: [epochNumber], onDelete: Cascade)
   token         Token       @relation(fields: [tokenAddress], references: [address], onDelete: Cascade)
+  user          User?       @relation("UserRewards", fields: [userId], references: [id])
 
   @@map("reward_distributions")
   @@unique([epochNumber, tokenAddress, wallet])
