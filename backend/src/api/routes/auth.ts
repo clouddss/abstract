@@ -12,14 +12,18 @@ const router = Router();
 
 // Validation schemas
 const loginSchema = z.object({
-  address: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
-  signature: z.string(),
-  message: z.string(),
-  timestamp: z.number()
+  body: z.object({
+    address: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+    signature: z.string(),
+    message: z.string(),
+    timestamp: z.number()
+  })
 });
 
 const refreshSchema = z.object({
-  refreshToken: z.string()
+  body: z.object({
+    refreshToken: z.string()
+  })
 });
 
 // Helper to verify signature
