@@ -54,7 +54,7 @@ export default function LaunchPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!isConnected || !walletClient || !user) {
+    if (!isConnected || !walletClient || !publicClient || !user) {
       setError('Please connect your wallet first')
       return
     }
