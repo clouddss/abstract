@@ -33,6 +33,59 @@ export class TokensService {
   }
 
   /**
+   * Launch a new token - returns transaction data for wallet signing
+   */
+  async launchToken(data: CreateTokenRequest): Promise<{
+    success: boolean;
+    data: {
+      to: string;
+      data: string;
+      value: string;
+      estimatedGas: string;
+      launchFee: string;
+      message: string;
+    };
+  }> {
+    return apiClient.post('/tokens/launch', data);
+  }
+
+  /**
+   * Confirm token launch after transaction is mined
+   */
+  async confirmTokenLaunch(data: {
+    txHash: string;
+    name: string;
+    symbol: string;
+    description?: string;
+    imageUrl?: string;
+    website?: string;
+    twitter?: string;
+    telegram?: string;
+  }): Promise<{
+    success: boolean;
+    data: {
+      token: any;
+      message: string;
+    };
+  }> {
+    return apiClient.post('/tokens/launch/confirm', data);
+  }
+
+  /**
+   * Get current launch fee
+   */
+  async getLaunchFee(): Promise<{
+    success: boolean;
+    data: {
+      fee: string;
+      feeFormatted: string;
+      currency: string;
+    };
+  }> {
+    return apiClient.get('/tokens/launch/fee');
+  }
+
+  /**
    * Get all tokens with filtering, sorting, and pagination
    */
   async getTokens(params?: GetTokensParams): Promise<GetTokensResponse> {

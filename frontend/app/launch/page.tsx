@@ -1,8 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAccount, useWalletClient } from 'wagmi'
+import { parseEther } from 'viem'
 import { Button } from '@/components/ui/Button'
+import { tokensService } from '@/lib/api/services/tokens.service'
+import { useAuth } from '@/hooks/useAuth'
 import { 
   Rocket, 
   Upload, 
@@ -14,11 +18,15 @@ import {
   Twitter,
   DollarSign,
   Users,
-  Target
+  Target,
+  AlertCircle
 } from 'lucide-react'
 
 export default function LaunchPage() {
   const router = useRouter()
+  const { isConnected } = useAccount()
+  const { data: walletClient } = useWalletClient()
+  const { user } = useAuth()
   const [formData, setFormData] = useState({
     name: '',
     symbol: '',
@@ -30,18 +38,74 @@ export default function LaunchPage() {
   })
   const [step, setStep] = useState(1)
   const [isLaunching, setIsLaunching] = useState(false)
+  const [launchFee, setLaunchFee] = useState('0.01')
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    // Fetch current launch fee
+    tokensService.getLaunchFee().then(response => {
+      if (response.success) {
+        setLaunchFee(response.data.feeFormatted)
+      }
+    }).catch(console.error)
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLaunching(true)
-    // TODO: Implement token launch logic
-    console.log('Launching token:', formData)
     
-    // Simulate launch process
-    setTimeout(() => {
+    if (!isConnected || !walletClient || !user) {
+      setError('Please connect your wallet first')
+      return
+    }
+
+    setIsLaunching(true)
+    setError(null)
+
+    try {
+      // Step 1: Get transaction data from backend
+      const launchResponse = await tokensService.launchToken(formData)
+      
+      if (!launchResponse.success) {
+        throw new Error('Failed to prepare token launch')
+      }
+
+      const { to, data, value, estimatedGas } = launchResponse.data
+
+      // Step 2: Send transaction via wallet
+      const hash = await walletClient.sendTransaction({
+        to: to as `0x${string}`,
+        data: data as `0x${string}`,
+        value: BigInt(value),
+        gas: BigInt(estimatedGas)
+      })
+
+      console.log('Transaction sent:', hash)
+
+      // Step 3: Wait for transaction to be mined
+      const receipt = await walletClient.waitForTransactionReceipt({ hash })
+      
+      if (receipt.status !== 'success') {
+        throw new Error('Transaction failed')
+      }
+
+      // Step 4: Confirm with backend
+      const confirmResponse = await tokensService.confirmTokenLaunch({
+        txHash: hash,
+        ...formData
+      })
+
+      if (confirmResponse.success) {
+        // Navigate to the new token page
+        router.push(`/token/${confirmResponse.data.token.address}`)
+      } else {
+        throw new Error('Failed to confirm token launch')
+      }
+    } catch (err: any) {
+      console.error('Launch error:', err)
+      setError(err.message || 'Failed to launch token')
+    } finally {
       setIsLaunching(false)
-      router.push('/tokens')
-    }, 3000)
+    }
   }
 
   const nextStep = () => setStep(step + 1)
@@ -296,7 +360,7 @@ export default function LaunchPage() {
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Launch Fee</span>
-                        <span className="font-semibold text-yellow-400">0.01 ETH</span>
+                        <span className="font-semibold text-yellow-400">{launchFee} ETH</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Platform Fee</span>
@@ -314,7 +378,7 @@ export default function LaunchPage() {
                   <div>
                     <h3 className="font-semibold mb-2 flex items-center">
                       <DollarSign className="h-4 w-4 mr-1 text-yellow-400" />
-                      Launch Fee: 0.01 ETH
+                      Launch Fee: {launchFee} ETH
                     </h3>
                     <p className="text-sm text-muted-foreground mb-4">
                       This one-time fee helps prevent spam and funds continued platform development. 
@@ -342,6 +406,26 @@ export default function LaunchPage() {
                 </div>
               </div>
 
+              {/* Error Display */}
+              {error && (
+                <div className="glass-card rounded-lg p-4 border border-red-500/20 bg-red-500/10">
+                  <div className="flex items-center space-x-2">
+                    <AlertCircle className="h-5 w-5 text-red-500" />
+                    <p className="text-red-500">{error}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Wallet Connection Check */}
+              {!isConnected && (
+                <div className="glass-card rounded-lg p-4 border border-yellow-500/20 bg-yellow-500/10">
+                  <div className="flex items-center space-x-2">
+                    <AlertCircle className="h-5 w-5 text-yellow-500" />
+                    <p className="text-yellow-500">Please connect your wallet to launch a token</p>
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-between">
                 <Button type="button" onClick={prevStep} variant="outline">
                   Previous
@@ -349,7 +433,7 @@ export default function LaunchPage() {
                 <Button 
                   type="submit" 
                   className="btn-gradient px-8 py-3"
-                  disabled={isLaunching}
+                  disabled={isLaunching || !isConnected}
                 >
                   {isLaunching ? (
                     <div className="flex items-center space-x-2">
