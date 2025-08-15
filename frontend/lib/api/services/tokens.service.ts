@@ -36,15 +36,12 @@ export class TokensService {
    * Launch a new token - returns transaction data for wallet signing
    */
   async launchToken(data: CreateTokenRequest): Promise<{
-    success: boolean;
-    data: {
-      to: string;
-      data: string;
-      value: string;
-      estimatedGas: string;
-      launchFee: string;
-      message: string;
-    };
+    to: string;
+    data: string;
+    value: string;
+    estimatedGas: string;
+    launchFee: string;
+    message: string;
   }> {
     return apiClient.post('/tokens/launch', data);
   }
@@ -62,11 +59,8 @@ export class TokensService {
     twitter?: string;
     telegram?: string;
   }): Promise<{
-    success: boolean;
-    data: {
-      token: any;
-      message: string;
-    };
+    token: any;
+    message: string;
   }> {
     return apiClient.post('/tokens/launch/confirm', data);
   }
@@ -75,12 +69,9 @@ export class TokensService {
    * Get current launch fee
    */
   async getLaunchFee(): Promise<{
-    success: boolean;
-    data: {
-      fee: string;
-      feeFormatted: string;
-      currency: string;
-    };
+    fee: string;
+    feeFormatted: string;
+    currency: string;
   }> {
     return apiClient.get('/tokens/launch/fee');
   }

@@ -45,9 +45,7 @@ export default function LaunchPage() {
   useEffect(() => {
     // Fetch current launch fee
     tokensService.getLaunchFee().then(response => {
-      if (response.success) {
-        setLaunchFee(response.data.feeFormatted)
-      }
+      setLaunchFee(response.feeFormatted)
     }).catch(console.error)
   }, [])
 
@@ -68,11 +66,8 @@ export default function LaunchPage() {
       const launchResponse = await tokensService.launchToken(formData)
       console.log('Launch response:', launchResponse)
       
-      if (!launchResponse.success) {
-        throw new Error(launchResponse.error || 'Failed to prepare token launch')
-      }
-
-      const { to, data, value } = launchResponse.data
+      // The API client returns the data directly
+      const { to, data, value } = launchResponse
 
       // Step 2: Send transaction via wallet (let wallet handle gas estimation)
       console.log('Sending transaction...', { to, data, value })
@@ -97,9 +92,10 @@ export default function LaunchPage() {
         ...formData
       })
 
-      if (confirmResponse.success) {
+      // The API client returns the data directly
+      if (confirmResponse && confirmResponse.token) {
         // Navigate to the new token page
-        router.push(`/token/${confirmResponse.data.token.address}`)
+        router.push(`/token/${confirmResponse.token.address}`)
       } else {
         throw new Error('Failed to confirm token launch')
       }
