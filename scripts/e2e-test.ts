@@ -89,7 +89,7 @@ class E2ETestRunner {
           resolve();
         });
         
-        this.ws.on('error', (error) => {
+        this.ws.on('error', (error: any) => {
           reject(error);
         });
         
@@ -239,7 +239,7 @@ class E2ETestRunner {
           reject(new Error('Timeout waiting for WebSocket message'));
         }, 10000);
         
-        this.ws!.on('message', (data) => {
+        this.ws!.on('message', (data: any) => {
           try {
             const message = JSON.parse(data.toString());
             log.info(`Received WebSocket message: ${message.type}`);

@@ -3,8 +3,12 @@ import { z } from 'zod';
 import { prisma } from '../../database/client';
 import { validateRequest } from '../middleware/validation';
 import { Interval } from '@prisma/client';
+import tokenLaunchRouter from './tokens-launch';
 
 const router = Router();
+
+// Mount launch routes
+router.use('/', tokenLaunchRouter);
 
 // Validation schemas
 const createTokenSchema = z.object({

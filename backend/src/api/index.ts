@@ -13,6 +13,9 @@ import statsRouter from './routes/stats';
 
 const app = express();
 
+// Trust proxy for rate limiting behind NGINX
+app.set('trust proxy', true);
+
 // Security middleware
 app.use(helmet());
 
@@ -39,7 +42,7 @@ const corsOptions: cors.CorsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-wallet-signature', 'x-api-key'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-wallet-address', 'x-wallet-signature', 'x-api-key'],
   exposedHeaders: ['x-total-count', 'x-page-count'],
   maxAge: 86400 // 24 hours
 };

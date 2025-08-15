@@ -40,6 +40,9 @@ model Token {
   migrated        Boolean  @default(false)
   migratedAt      DateTime?
   dexPair         String?
+  deployTxHash    String?  @unique
+  deployBlockNumber Int?
+  txCount         Int      @default(0)
   totalSupply     String   @default("1000000000000000000000000000") // 1B tokens in wei
   curveSupply     String   @default("700000000000000000000000000")   // 700M tokens in wei
   soldSupply      String   @default("0")
