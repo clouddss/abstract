@@ -70,26 +70,37 @@ export default function LaunchPage() {
         throw new Error('Failed to prepare token launch')
       }
 
-      const { to, data, value, estimatedGas } = launchResponse.data
+      const { to, data, value } = launchResponse.data
 
-      // Step 2: Send transaction via wallet
+      // Step 2: Estimate gas with the user's wallet
+      const gasEstimate = await publicClient.estimateGas({
+        account: walletClient.account!,
+        to: to as `0x${string}`,
+        data: data as `0x${string}`,
+        value: BigInt(value)
+      })
+
+      // Add 20% buffer to gas estimate
+      const gasLimit = gasEstimate + (gasEstimate * 20n / 100n)
+
+      // Step 3: Send transaction via wallet
       const hash = await walletClient.sendTransaction({
         to: to as `0x${string}`,
         data: data as `0x${string}`,
         value: BigInt(value),
-        gas: BigInt(estimatedGas)
+        gas: gasLimit
       })
 
       console.log('Transaction sent:', hash)
 
-      // Step 3: Wait for transaction to be mined
+      // Step 4: Wait for transaction to be mined
       const receipt = await publicClient.waitForTransactionReceipt({ hash })
       
       if (receipt.status !== 'success') {
         throw new Error('Transaction failed')
       }
 
-      // Step 4: Confirm with backend
+      // Step 5: Confirm with backend
       const confirmResponse = await tokensService.confirmTokenLaunch({
         txHash: hash,
         ...formData

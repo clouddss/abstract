@@ -209,28 +209,9 @@ export async function getLaunchFee(): Promise<bigint> {
 }
 
 export async function estimateGasForDeploy(name: string, symbol: string): Promise<bigint> {
-  try {
-    const contract = getLaunchFactoryContract();
-    const launchFee = await getLaunchFee();
-    
-    // Create a dummy wallet for estimation
-    const provider = getProvider();
-    const wallet = ethers.Wallet.createRandom().connect(provider);
-    const contractWithSigner = contract.connect(wallet) as any;
-    
-    const gasEstimate = await contractWithSigner.deployToken.estimateGas(
-      name,
-      symbol,
-      { value: launchFee }
-    );
-    
-    // Add 20% buffer
-    return gasEstimate * 120n / 100n;
-  } catch (error) {
-    console.error('Error estimating gas:', error);
-    // Return a reasonable default
-    return 800000n;
-  }
+  // Return a reasonable default gas limit
+  // The frontend will do proper estimation with the user's wallet
+  return 1000000n;
 }
 
 export function encodeDeployTokenData(name: string, symbol: string): string {
