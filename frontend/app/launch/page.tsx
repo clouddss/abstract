@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAccount, useWalletClient } from 'wagmi'
+import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
 import { parseEther } from 'viem'
 import { Button } from '@/components/ui/Button'
 import { tokensService } from '@/lib/api/services/tokens.service'
@@ -26,6 +26,7 @@ export default function LaunchPage() {
   const router = useRouter()
   const { isConnected } = useAccount()
   const { data: walletClient } = useWalletClient()
+  const publicClient = usePublicClient()
   const { user } = useAuth()
   const [formData, setFormData] = useState({
     name: '',
@@ -82,7 +83,7 @@ export default function LaunchPage() {
       console.log('Transaction sent:', hash)
 
       // Step 3: Wait for transaction to be mined
-      const receipt = await walletClient.waitForTransactionReceipt({ hash })
+      const receipt = await publicClient.waitForTransactionReceipt({ hash })
       
       if (receipt.status !== 'success') {
         throw new Error('Transaction failed')
