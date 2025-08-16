@@ -75,7 +75,7 @@ class PerformanceMonitor {
   private recordNavigation(entry: PerformanceNavigationTiming) {
     const metric: PerformanceMetrics = {
       timestamp: Date.now(),
-      duration: entry.loadEventEnd - entry.navigationStart,
+      duration: entry.loadEventEnd - entry.fetchStart,
       operation: 'page_load',
       success: true
     };
