@@ -77,13 +77,13 @@ export const LAUNCH_FACTORY_ABI = [
       {
         "indexed": true,
         "internalType": "address",
-        "name": "bondingCurve",
+        "name": "creator",
         "type": "address"
       },
       {
         "indexed": true,
         "internalType": "address",
-        "name": "creator",
+        "name": "bondingCurve",
         "type": "address"
       },
       {
@@ -239,8 +239,8 @@ export function decodeTokenLaunchedEvent(receipt: ethers.TransactionReceipt): {
       if (parsed && parsed.name === 'TokenLaunched') {
         return {
           token: parsed.args[0],
-          bondingCurve: parsed.args[1],
-          creator: parsed.args[2],
+          creator: parsed.args[1],
+          bondingCurve: parsed.args[2],
           name: parsed.args[3],
           symbol: parsed.args[4]
         };
