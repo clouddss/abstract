@@ -56,7 +56,9 @@ export function TradingInterface({
     amount && isValidETHAmount(amount) ? {
       tokenAddress,
       type: tradeType === 'buy' ? TradeType.BUY : TradeType.SELL,
-      amountIn: parseETHToWei(amount).toString()
+      amountIn: tradeType === 'buy' 
+        ? parseETHToWei(amount).toString()  // ETH amount in wei for buy
+        : parseETHToWei(amount).toString()  // Token amount in wei for sell (assuming 18 decimals)
     } : undefined
   )
   
@@ -101,13 +103,15 @@ export function TradingInterface({
     setIsTrading(true)
     
     try {
-      const minAmountOut = calculateMinOutput(estimateData.amountOut || estimateData.outputAmount)
+      const minAmountOut = calculateMinOutput(estimateData.amountOut || estimateData.outputAmount || '0')
       
       // Get transaction data from backend
       const result = await executeTrade.mutateAsync({
         tokenAddress,
         type: tradeType === 'buy' ? TradeType.BUY : TradeType.SELL,
-        amountIn: amountWei.toString(),
+        amountIn: tradeType === 'buy' 
+          ? amountWei.toString() // ETH amount in wei
+          : parseETHToWei(amount).toString(), // Token amount in wei
         minAmountOut
       })
       
@@ -444,14 +448,14 @@ export function TradingInterface({
                 
                 <div className="flex justify-between">
                   <span className="text-gray-600">Price impact</span>
-                  <span className={`font-semibold ${estimateData.priceImpact > 3 ? 'text-red-500' : estimateData.priceImpact > 1 ? 'text-yellow-500' : 'text-green-500'}`}>
-                    {estimateData.priceImpact.toFixed(2)}%
+                  <span className={`font-semibold ${(estimateData.priceImpact || 0) > 3 ? 'text-red-500' : (estimateData.priceImpact || 0) > 1 ? 'text-yellow-500' : 'text-green-500'}`}>
+                    {(estimateData.priceImpact || 0).toFixed(2)}%
                   </span>
                 </div>
                 
                 <div className="flex justify-between">
                   <span className="text-gray-600">Platform fee</span>
-                  <span className="font-semibold">{formatWei(estimateData.fee)} ETH</span>
+                  <span className="font-semibold">{formatWei(estimateData.fee || '0')} ETH</span>
                 </div>
                 
                 <div className="flex justify-between border-t border-gray-200 pt-2">
@@ -466,7 +470,7 @@ export function TradingInterface({
                 </div>
                 
                 {/* Warnings */}
-                {estimateData.priceImpact > 3 && (
+                {(estimateData.priceImpact || 0) > 3 && (
                   <div className="flex items-start space-x-2 p-3 bg-red-50 border border-red-200 rounded-md">
                     <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5" />
                     <div className="text-sm">
@@ -477,7 +481,7 @@ export function TradingInterface({
                 )}
                 
                 {/* Additional warnings */}
-                {estimateData.priceImpact > 10 && (
+                {(estimateData.priceImpact || 0) > 10 && (
                   <div className="flex items-start space-x-2 p-3 bg-red-100 border border-red-300 rounded-md">
                     <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5" />
                     <div className="text-sm">

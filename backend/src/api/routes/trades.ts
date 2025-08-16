@@ -96,12 +96,22 @@ router.post('/estimate', validateRequest(estimateTradeSchema), async (req: Reque
     } else {
       // Calculate ETH out for token amount (amountIn is already in wei)
       const tokenAmount = BigInt(amountIn);
-      const ethOut = await bondingCurve.calculateEthOut(tokenAmount);
+      
+      let ethOut: bigint;
+      try {
+        ethOut = await bondingCurve.calculateEthOut(tokenAmount);
+      } catch (error) {
+        console.error('Error calculating ETH out:', error);
+        // Fallback calculation if the contract doesn't have calculateEthOut
+        const currentPrice = await bondingCurve.getCurrentPrice();
+        // Simple approximation: tokens * price
+        ethOut = (tokenAmount * BigInt(currentPrice)) / ethers.parseEther('1');
+      }
       
       // Get current price
       const currentPrice = await bondingCurve.getCurrentPrice();
       
-      // Calculate fee
+      // Calculate fee (1% of ETH output)
       const feeAmount = (ethOut * 100n) / 10000n;
       
       output = ethers.formatEther(ethOut);
@@ -109,7 +119,8 @@ router.post('/estimate', validateRequest(estimateTradeSchema), async (req: Reque
       
       // Simple price impact calculation
       const tokenValue = Number(ethers.formatEther(tokenAmount));
-      priceImpact = (tokenValue / 1000).toFixed(2); // Rough estimate based on token amount
+      const ethValue = Number(ethers.formatEther(ethOut));
+      priceImpact = Math.min((tokenValue / 10000), 10).toFixed(2); // Cap at 10% for safety
       
       newPrice = ethers.formatEther(currentPrice);
     }
@@ -260,20 +271,22 @@ router.post('/execute', authMiddleware, async (req: Request, res: Response) => {
 
     if (type === TradeType.BUY || type === 'BUY') {
       // Prepare buy transaction (amountIn is in wei)
-      const minTokensOut = BigInt(minAmountOut);
+      const minTokensOut = BigInt(minAmountOut || '0');
       
       to = bondingCurveAddress;
       data = iface.encodeFunctionData('buyTokens', [minTokensOut]);
       value = amountIn; // Already in wei
       
-    } else {
+    } else if (type === TradeType.SELL || type === 'SELL') {
       // Prepare sell transaction
       const tokenAmount = BigInt(amountIn);
-      const minEthOut = BigInt(minAmountOut);
+      const minEthOut = BigInt(minAmountOut || '0');
       
       to = bondingCurveAddress;
       data = iface.encodeFunctionData('sellTokens', [tokenAmount, minEthOut]);
-      value = '0';
+      value = '0'; // Sell transactions don't send ETH
+    } else {
+      throw new Error(`Invalid trade type: ${type}`);
     }
 
     res.json({
