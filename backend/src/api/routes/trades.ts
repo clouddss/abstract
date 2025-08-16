@@ -11,9 +11,9 @@ const router = Router();
 // Validation schemas
 const estimateTradeSchema = z.object({
   body: z.object({
-    tokenAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
-    tradeType: z.enum(['buy', 'sell']),
-    amount: z.string(), // ETH amount for buy, token amount for sell
+    tokenAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/i), // Case insensitive
+    type: z.enum(['BUY', 'SELL']), // Frontend sends uppercase
+    amountIn: z.string(), // Amount in wei
   })
 });
 
@@ -33,7 +33,8 @@ const executeTradeSchema = z.object({
  */
 router.post('/estimate', validateRequest(estimateTradeSchema), async (req: Request, res: Response) => {
   try {
-    const { tokenAddress, tradeType, amount } = req.body;
+    const { tokenAddress, type, amountIn } = req.body;
+    const tradeType = type.toLowerCase(); // Convert BUY/SELL to buy/sell
 
     // Get token info
     const token = await prisma.token.findUnique({
@@ -68,8 +69,8 @@ router.post('/estimate', validateRequest(estimateTradeSchema), async (req: Reque
     let fee: string;
 
     if (tradeType === 'buy') {
-      // Calculate tokens out for ETH amount
-      const ethAmount = ethers.parseEther(amount);
+      // Calculate tokens out for ETH amount (amountIn is already in wei)
+      const ethAmount = BigInt(amountIn);
       const tokensOut = await bondingCurve.calculateTokensOut(ethAmount);
       
       // Get current price
@@ -89,8 +90,8 @@ router.post('/estimate', validateRequest(estimateTradeSchema), async (req: Reque
       newPrice = ethers.formatEther(currentPrice);
       
     } else {
-      // Calculate ETH out for token amount
-      const tokenAmount = ethers.parseEther(amount);
+      // Calculate ETH out for token amount (amountIn is already in wei)
+      const tokenAmount = BigInt(amountIn);
       const ethOut = await bondingCurve.calculateEthOut(tokenAmount);
       
       // Get current price
@@ -113,14 +114,14 @@ router.post('/estimate', validateRequest(estimateTradeSchema), async (req: Reque
       success: true,
       data: {
         tokenAddress,
-        tradeType,
-        inputAmount: amount,
-        outputAmount: output,
+        tradeType: type, // Return uppercase as frontend expects
+        inputAmount: amountIn, // Return in wei as sent
+        outputAmount: ethers.parseEther(output).toString(), // Return in wei
         priceImpact,
-        currentPrice: newPrice,
-        fee,
-        minimumReceived: output, // In production, subtract slippage
-        executionPrice: newPrice
+        currentPrice: ethers.parseEther(newPrice).toString(), // Return in wei
+        fee: ethers.parseEther(fee).toString(), // Return in wei
+        minimumReceived: ethers.parseEther(output).toString(), // In wei
+        executionPrice: ethers.parseEther(newPrice).toString() // In wei
       }
     });
 
