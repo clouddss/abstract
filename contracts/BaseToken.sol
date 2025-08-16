@@ -97,6 +97,23 @@ contract BaseToken is ERC20, ERC20Permit, Ownable, ReentrancyGuard {
     }
 
     /**
+     * @notice Update bonding curve address (only owner or factory during deployment)
+     * @param newBondingCurve New bonding curve address
+     */
+    function updateBondingCurve(address newBondingCurve) external onlyOwner {
+        require(newBondingCurve != address(0), "Invalid bonding curve address");
+        require(!migrated, "Cannot update bonding curve after migration");
+        
+        // Transfer all tokens from current bonding curve to new one
+        uint256 balance = balanceOf(bondingCurve);
+        if (balance > 0) {
+            _transfer(bondingCurve, newBondingCurve, balance);
+        }
+        
+        bondingCurve = newBondingCurve;
+    }
+
+    /**
      * @notice Mark token as migrated and lock liquidity
      * @param dexPair Address of the DEX pair
      * @param liquidityAmount Amount of liquidity locked

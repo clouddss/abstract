@@ -8,47 +8,56 @@ pragma solidity ^0.8.20;
  */
 library BondingCurveMath {
     uint256 private constant PRECISION = 1e18;
-    uint256 private constant BASE_PRICE = 1e13; // 0.00001 ETH base price
+    uint256 private constant BASE_PRICE = 1e12; // 0.000001 ETH base price (higher to prevent $0.00 prices)
     uint256 private constant CURVE_EXPONENT = 15e17; // 1.5 exponent (1.5 * 1e18)
     uint256 private constant MAX_SUPPLY_CURVE = 700_000_000 * 1e18; // 70% of 1B tokens
 
     /**
      * @notice Calculate the integral of the bonding curve price function
-     * @dev Integral of y = BASE_PRICE * x^1.5 from 0 to supply
+     * @dev Integral approximation for practical use in trading
      * @param supply Token supply for integration
      * @return integral The integral value
      */
     function calculateIntegral(uint256 supply) internal pure returns (uint256 integral) {
         if (supply == 0) return 0;
         
-        // Integral of x^1.5 is (2/2.5) * x^2.5 = 0.8 * x^2.5
-        // We calculate x^2.5 = x^2 * sqrt(x)
-        uint256 supplySquared = (supply * supply) / PRECISION;
-        uint256 supplySqrt = sqrt(supply);
-        uint256 supply25 = (supplySquared * supplySqrt) / PRECISION;
+        // Simplified integral calculation for the adjusted formula
+        // Using average price * supply as approximation
+        uint256 startPrice = BASE_PRICE;
+        uint256 endPrice = calculatePrice(supply);
+        uint256 avgPrice = (startPrice + endPrice) / 2;
         
-        // Apply coefficient: BASE_PRICE * 0.8
-        integral = (BASE_PRICE * 8 * supply25) / (10 * PRECISION);
+        integral = (avgPrice * supply) / PRECISION;
     }
 
     /**
      * @notice Calculate price at specific supply point
-     * @dev y = BASE_PRICE * supply^1.5
+     * @dev y = BASE_PRICE * (1 + supply/PRECISION)^1.5
      * @param supply Current token supply
      * @return price Price per token at given supply
      */
     function calculatePrice(uint256 supply) internal pure returns (uint256 price) {
         if (supply == 0) return BASE_PRICE;
         
-        // Calculate supply^1.5 = supply * sqrt(supply)
-        uint256 supplySqrt = sqrt(supply);
-        uint256 supply15 = (supply * supplySqrt) / PRECISION;
+        // Add 1 to supply in terms of precision to avoid zero price
+        // This makes the formula: BASE_PRICE * (1 + supply/PRECISION)^1.5
+        uint256 adjustedSupply = PRECISION + supply;
         
+        // Calculate adjustedSupply^1.5 = adjustedSupply * sqrt(adjustedSupply)
+        uint256 supplySqrt = sqrt(adjustedSupply);
+        uint256 supply15 = (adjustedSupply * supplySqrt) / PRECISION;
+        
+        // Apply base price
         price = (BASE_PRICE * supply15) / PRECISION;
+        
+        // Ensure minimum price
+        if (price < BASE_PRICE) {
+            price = BASE_PRICE;
+        }
     }
 
     /**
-     * @notice Calculate tokens received for ETH amount using integral method
+     * @notice Calculate tokens received for ETH amount using average price method
      * @param currentSupply Current circulating supply
      * @param ethAmount ETH amount to spend
      * @return tokenAmount Tokens that would be received
@@ -58,36 +67,43 @@ library BondingCurveMath {
         uint256 ethAmount
     ) internal pure returns (uint256 tokenAmount) {
         require(currentSupply <= MAX_SUPPLY_CURVE, "Supply exceeds curve limit");
+        require(ethAmount > 0, "ETH amount must be positive");
         
-        uint256 currentIntegral = calculateIntegral(currentSupply);
-        uint256 targetIntegral = currentIntegral + ethAmount;
+        // Calculate current price
+        uint256 currentPrice = calculatePrice(currentSupply);
         
-        // Binary search to find supply that gives target integral
-        uint256 low = currentSupply;
-        uint256 high = MAX_SUPPLY_CURVE;
-        uint256 tolerance = 1e15; // 0.001 token tolerance
+        // Estimate token amount using current price as starting point
+        uint256 estimatedTokens = (ethAmount * PRECISION) / currentPrice;
         
-        while (high - low > tolerance) {
-            uint256 mid = (low + high) / 2;
-            uint256 midIntegral = calculateIntegral(mid);
-            
-            if (midIntegral < targetIntegral) {
-                low = mid;
-            } else {
-                high = mid;
-            }
+        // Cap estimated tokens to remaining supply
+        uint256 remainingSupply = MAX_SUPPLY_CURVE - currentSupply;
+        if (estimatedTokens > remainingSupply) {
+            estimatedTokens = remainingSupply;
         }
         
-        tokenAmount = low - currentSupply;
+        // Use iterative approximation for accuracy
+        tokenAmount = estimatedTokens;
+        for (uint256 i = 0; i < 5; i++) {
+            uint256 newSupply = currentSupply + tokenAmount;
+            uint256 avgPrice = (calculatePrice(currentSupply) + calculatePrice(newSupply)) / 2;
+            uint256 adjustedTokenAmount = (ethAmount * PRECISION) / avgPrice;
+            
+            if (adjustedTokenAmount > remainingSupply) {
+                tokenAmount = remainingSupply;
+                break;
+            }
+            
+            tokenAmount = adjustedTokenAmount;
+        }
         
-        // Ensure we don't exceed curve limit
-        if (currentSupply + tokenAmount > MAX_SUPPLY_CURVE) {
-            tokenAmount = MAX_SUPPLY_CURVE - currentSupply;
+        // Final safety check
+        if (tokenAmount == 0 && ethAmount > 0) {
+            tokenAmount = 1; // Minimum 1 wei token
         }
     }
 
     /**
-     * @notice Calculate ETH received for token amount using integral method
+     * @notice Calculate ETH received for token amount using average price method
      * @param currentSupply Current circulating supply
      * @param tokenAmount Tokens to sell
      * @return ethAmount ETH that would be received
@@ -97,12 +113,22 @@ library BondingCurveMath {
         uint256 tokenAmount
     ) internal pure returns (uint256 ethAmount) {
         require(tokenAmount <= currentSupply, "Cannot sell more than supply");
+        require(tokenAmount > 0, "Token amount must be positive");
         
         uint256 newSupply = currentSupply - tokenAmount;
-        uint256 currentIntegral = calculateIntegral(currentSupply);
-        uint256 newIntegral = calculateIntegral(newSupply);
         
-        ethAmount = currentIntegral - newIntegral;
+        // Calculate average price between current and new supply
+        uint256 currentPrice = calculatePrice(currentSupply);
+        uint256 newPrice = calculatePrice(newSupply);
+        uint256 avgPrice = (currentPrice + newPrice) / 2;
+        
+        // Calculate ETH amount using average price
+        ethAmount = (avgPrice * tokenAmount) / PRECISION;
+        
+        // Ensure we return at least some ETH for any token amount
+        if (ethAmount == 0 && tokenAmount > 0) {
+            ethAmount = 1; // Minimum 1 wei ETH
+        }
     }
 
     /**

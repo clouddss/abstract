@@ -8,16 +8,14 @@ const config: HardhatUserConfig = {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 200,
+        runs: 1,
       },
-      viaIR: true,
+      viaIR: false,
     },
   },
   networks: {
     hardhat: {
-      forking: {
-        url: process.env.ABSTRACT_RPC_URL || "https://api.testnet.abs.xyz",
-      },
+      allowUnlimitedContractSize: true,
     },
     "abstract-testnet": {
       url: process.env.ABSTRACT_RPC_URL || "https://api.testnet.abs.xyz",

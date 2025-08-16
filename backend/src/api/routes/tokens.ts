@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { ethers } from 'ethers';
 import { prisma } from '../../database/client';
 import { validateRequest } from '../middleware/validation';
 import { Interval } from '@prisma/client';
@@ -441,12 +442,38 @@ function calculateHolderPercentage(balance: string, totalSupply: string): number
 
 async function getCurrentTokenPrice(address: string): Promise<string> {
   try {
-    const latestTrade = await prisma.trade.findFirst({
-      where: { tokenAddress: address },
-      orderBy: { timestamp: 'desc' }
+    // Get token from database to find bonding curve
+    const token = await prisma.token.findUnique({
+      where: { address },
+      select: { bondingCurve: true, migrated: true }
     });
-    return latestTrade?.price || '0';
-  } catch {
+    
+    if (!token || !token.bondingCurve) {
+      return '0';
+    }
+    
+    // If migrated, get price from trades
+    if (token.migrated) {
+      const latestTrade = await prisma.trade.findFirst({
+        where: { tokenAddress: address },
+        orderBy: { timestamp: 'desc' }
+      });
+      return latestTrade?.price || '0';
+    }
+    
+    // Get price from bonding curve contract
+    const { getProvider, BONDING_CURVE_ABI } = await import('../../contracts/LaunchFactory');
+    const provider = getProvider();
+    const bondingCurve = new ethers.Contract(
+      token.bondingCurve,
+      BONDING_CURVE_ABI,
+      provider
+    );
+    
+    const price = await bondingCurve.getCurrentPrice();
+    return ethers.formatEther(price);
+  } catch (error) {
+    console.error('Error getting token price:', error);
     return '0';
   }
 }

@@ -151,42 +151,88 @@ export const BASE_TOKEN_ABI = [
 export const BONDING_CURVE_ABI = [
   {
     "inputs": [],
-    "name": "token",
+    "name": "getCurrentPrice",
+    "outputs": [{"internalType": "uint256", "name": "price", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{"internalType": "uint256", "name": "ethAmount", "type": "uint256"}],
+    "name": "calculateTokensOut",
+    "outputs": [{"internalType": "uint256", "name": "tokenAmount", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{"internalType": "uint256", "name": "tokenAmount", "type": "uint256"}],
+    "name": "calculateEthOut",
+    "outputs": [{"internalType": "uint256", "name": "ethAmount", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{"internalType": "uint256", "name": "minTokensOut", "type": "uint256"}],
+    "name": "buyTokens",
+    "outputs": [{"internalType": "uint256", "name": "tokenAmount", "type": "uint256"}],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "uint256", "name": "tokenAmount", "type": "uint256"},
+      {"internalType": "uint256", "name": "minEthOut", "type": "uint256"}
+    ],
+    "name": "sellTokens",
+    "outputs": [{"internalType": "uint256", "name": "ethAmount", "type": "uint256"}],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getCurveStats",
     "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
+      {"internalType": "uint256", "name": "currentPrice", "type": "uint256"},
+      {"internalType": "uint256", "name": "tokensSold_", "type": "uint256"},
+      {"internalType": "uint256", "name": "tokensRemaining", "type": "uint256"},
+      {"internalType": "uint256", "name": "reserveBalance_", "type": "uint256"},
+      {"internalType": "uint256", "name": "marketCap", "type": "uint256"},
+      {"internalType": "bool", "name": "completed_", "type": "bool"}
     ],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [],
-    "name": "totalSupply",
+    "name": "getCurveProgress",
     "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+      {"internalType": "uint256", "name": "soldSupply_", "type": "uint256"},
+      {"internalType": "uint256", "name": "totalSupply", "type": "uint256"},
+      {"internalType": "uint256", "name": "progressBps", "type": "uint256"}
     ],
     "stateMutability": "view",
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "reserveBalance",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
+    "anonymous": false,
+    "inputs": [
+      {"indexed": true, "internalType": "address", "name": "buyer", "type": "address"},
+      {"indexed": false, "internalType": "uint256", "name": "ethAmount", "type": "uint256"},
+      {"indexed": false, "internalType": "uint256", "name": "tokenAmount", "type": "uint256"},
+      {"indexed": false, "internalType": "uint256", "name": "newPrice", "type": "uint256"}
     ],
-    "stateMutability": "view",
-    "type": "function"
+    "name": "TokensPurchased",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {"indexed": true, "internalType": "address", "name": "seller", "type": "address"},
+      {"indexed": false, "internalType": "uint256", "name": "tokenAmount", "type": "uint256"},
+      {"indexed": false, "internalType": "uint256", "name": "ethAmount", "type": "uint256"},
+      {"indexed": false, "internalType": "uint256", "name": "newPrice", "type": "uint256"}
+    ],
+    "name": "TokensSold",
+    "type": "event"
   }
 ];
 

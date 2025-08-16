@@ -87,9 +87,7 @@ contract BondingCurve is IBondingCurve, ReentrancyGuard, Ownable {
         require(factory_ != address(0), "Invalid factory address");
         require(platformTreasury_ != address(0), "Invalid treasury address");
 
-        if (token_ != address(0)) {
-            token = BaseToken(token_);
-        }
+        token = BaseToken(token_);
         creator = creator_;
         factory = factory_;
         platformTreasury = platformTreasury_;
@@ -245,15 +243,6 @@ contract BondingCurve is IBondingCurve, ReentrancyGuard, Ownable {
         emit PlatformTreasuryUpdated(oldTreasury, newTreasury);
     }
 
-    /**
-     * @notice Update token address (only factory, only once)
-     * @param tokenAddress Address of the token contract
-     */
-    function updateTokenAddress(address tokenAddress) external onlyOwner {
-        require(address(token) == address(0), "Token already set");
-        require(tokenAddress != address(0), "Invalid token address");
-        token = BaseToken(tokenAddress);
-    }
 
     /**
      * @notice Emergency function to migrate manually (only factory)

@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./interfaces/ILaunchFactory.sol";
 import "./BaseToken.sol";
 import "./BondingCurve.sol";
+import "./libraries/LaunchFactoryLib.sol";
 
 /**
  * @title LaunchFactory
@@ -13,6 +14,7 @@ import "./BondingCurve.sol";
  * @dev Uses minimal proxy pattern for gas-efficient deployments
  */
 contract LaunchFactory is ILaunchFactory, Ownable, ReentrancyGuard {
+    using LaunchFactoryLib for string;
     /// @notice Launch fee required for creating new tokens
     uint256 public launchFee = 0.01 ether;
 
@@ -92,15 +94,7 @@ contract LaunchFactory is ILaunchFactory, Ownable, ReentrancyGuard {
             allTokens.length
         ));
 
-        // Deploy bonding curve first (we need its address for token deployment)
-        bondingCurve = address(new BondingCurve{salt: salt}(
-            address(0), // Will be set after token deployment
-            msg.sender,
-            address(this),
-            platformTreasury
-        ));
-
-        // Deploy token with bonding curve address
+        // Deploy token first with factory as temporary owner
         tokenAddress = address(new BaseToken{salt: keccak256(abi.encodePacked(salt, "token"))}(
             metadata.name,
             metadata.symbol,
@@ -111,12 +105,23 @@ contract LaunchFactory is ILaunchFactory, Ownable, ReentrancyGuard {
                 twitter: metadata.twitter,
                 telegram: metadata.telegram
             }),
-            msg.sender,
-            bondingCurve
+            address(this), // Factory as temporary owner
+            address(this) // Temporarily use factory address
         ));
 
-        // Update bonding curve with correct token address
-        BondingCurve(payable(bondingCurve)).updateTokenAddress(tokenAddress);
+        // Deploy bonding curve with correct token address
+        bondingCurve = address(new BondingCurve{salt: salt}(
+            tokenAddress,
+            msg.sender,
+            address(this),
+            platformTreasury
+        ));
+
+        // Update token's bonding curve address
+        BaseToken(tokenAddress).updateBondingCurve(bondingCurve);
+        
+        // Transfer ownership to the actual creator
+        BaseToken(tokenAddress).transferOwnership(msg.sender);
 
         // Store token info
         tokenInfo[tokenAddress] = TokenInfo({
@@ -192,59 +197,6 @@ contract LaunchFactory is ILaunchFactory, Ownable, ReentrancyGuard {
         return allTokens;
     }
 
-    /**
-     * @notice Get tokens with pagination
-     * @param offset Starting index
-     * @param limit Maximum number of tokens to return
-     * @return tokens Array of token addresses
-     * @return total Total number of tokens
-     */
-    function getTokensPaginated(uint256 offset, uint256 limit)
-        external
-        view
-        returns (address[] memory tokens, uint256 total)
-    {
-        total = allTokens.length;
-        if (offset >= total) {
-            return (new address[](0), total);
-        }
-
-        uint256 end = offset + limit;
-        if (end > total) {
-            end = total;
-        }
-
-        tokens = new address[](end - offset);
-        for (uint256 i = offset; i < end; i++) {
-            tokens[i - offset] = allTokens[i];
-        }
-    }
-
-    /**
-     * @notice Get tokens by creator
-     * @param creator Creator address
-     * @return tokens Array of token addresses created by the user
-     */
-    function getTokensByCreator(address creator) external view returns (address[] memory tokens) {
-        uint256 count = 0;
-        
-        // Count tokens by creator
-        for (uint256 i = 0; i < allTokens.length; i++) {
-            if (tokenInfo[allTokens[i]].creator == creator) {
-                count++;
-            }
-        }
-
-        // Populate result array
-        tokens = new address[](count);
-        uint256 index = 0;
-        for (uint256 i = 0; i < allTokens.length; i++) {
-            if (tokenInfo[allTokens[i]].creator == creator) {
-                tokens[index] = allTokens[i];
-                index++;
-            }
-        }
-    }
 
     /**
      * @notice Get launch fee required for creating new token
@@ -290,63 +242,16 @@ contract LaunchFactory is ILaunchFactory, Ownable, ReentrancyGuard {
     function _validateMetadata(TokenMetadata calldata metadata) internal pure {
         // Basic URL validation (check if starts with http)
         if (bytes(metadata.imageUrl).length > 0) {
-            require(_isValidUrl(metadata.imageUrl), "Invalid image URL");
+            require(LaunchFactoryLib.isValidUrl(metadata.imageUrl), "Invalid image URL");
         }
         if (bytes(metadata.website).length > 0) {
-            require(_isValidUrl(metadata.website), "Invalid website URL");
+            require(LaunchFactoryLib.isValidUrl(metadata.website), "Invalid website URL");
         }
         if (bytes(metadata.twitter).length > 0) {
-            require(_isValidTwitter(metadata.twitter), "Invalid Twitter handle");
+            require(LaunchFactoryLib.isValidTwitter(metadata.twitter), "Invalid Twitter handle");
         }
         if (bytes(metadata.telegram).length > 0) {
-            require(_isValidTelegram(metadata.telegram), "Invalid Telegram handle");
+            require(LaunchFactoryLib.isValidTelegram(metadata.telegram), "Invalid Telegram handle");
         }
-    }
-
-    /**
-     * @notice Basic URL validation
-     * @param url URL to validate
-     * @return valid True if URL appears valid
-     */
-    function _isValidUrl(string memory url) internal pure returns (bool valid) {
-        bytes memory urlBytes = bytes(url);
-        if (urlBytes.length < 8) return false;
-        
-        // Check if starts with http:// or https://
-        return (
-            urlBytes[0] == 'h' &&
-            urlBytes[1] == 't' &&
-            urlBytes[2] == 't' &&
-            urlBytes[3] == 'p' &&
-            (urlBytes[4] == ':' || (urlBytes[4] == 's' && urlBytes[5] == ':'))
-        );
-    }
-
-    /**
-     * @notice Basic Twitter handle validation
-     * @param twitter Twitter handle to validate
-     * @return valid True if handle appears valid
-     */
-    function _isValidTwitter(string memory twitter) internal pure returns (bool valid) {
-        bytes memory twitterBytes = bytes(twitter);
-        if (twitterBytes.length == 0 || twitterBytes.length > 15) return false;
-        
-        // Check if starts with @ or is just the handle
-        if (twitterBytes[0] == '@') return twitterBytes.length > 1;
-        return true;
-    }
-
-    /**
-     * @notice Basic Telegram handle validation
-     * @param telegram Telegram handle to validate
-     * @return valid True if handle appears valid
-     */
-    function _isValidTelegram(string memory telegram) internal pure returns (bool valid) {
-        bytes memory telegramBytes = bytes(telegram);
-        if (telegramBytes.length == 0 || telegramBytes.length > 32) return false;
-        
-        // Check if starts with @ or is just the handle
-        if (telegramBytes[0] == '@') return telegramBytes.length > 1;
-        return true;
     }
 }
