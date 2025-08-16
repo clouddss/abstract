@@ -81,8 +81,14 @@ export default function LaunchPage() {
       const launchResponse = await tokensService.launchToken(formData)
       console.log('Launch response:', launchResponse)
       
-      // The API client returns the data directly
-      const { to, data, value } = launchResponse.data || launchResponse
+      // Type guard to check if response has the expected structure
+      if (!launchResponse || typeof launchResponse === 'string') {
+        throw new Error('Invalid response from server')
+      }
+      
+      // The API client returns the data directly from response.data.data
+      const transactionData = launchResponse as { to: string; data: string; value: string; launchFee?: string; message?: string }
+      const { to, data, value } = transactionData
 
       // Step 2: Send transaction via wallet (let MetaMask estimate)
       console.log('Sending transaction...', { to, data, value })
@@ -481,7 +487,7 @@ export default function LaunchPage() {
                 <Button 
                   type="submit" 
                   className="btn-gradient px-8 py-3"
-                  disabled={isLaunching || !isConnected || isLoadingFee || (chainId && !isCorrectChain(chainId))}
+                  disabled={isLaunching || !isConnected || isLoadingFee || (chainId ? !isCorrectChain(chainId) : false)}
                 >
                   {isLaunching ? (
                     <div className="flex items-center space-x-2">

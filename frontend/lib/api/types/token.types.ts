@@ -16,6 +16,15 @@ export interface CreateTokenResponse {
   launchFee: string;
 }
 
+// Launch token transaction data
+export interface LaunchTokenResponse {
+  to: string;
+  data: string;
+  value: string;
+  launchFee: string;
+  message: string;
+}
+
 // Token listing
 export type TokenSortField = 'created' | 'volume' | 'marketCap' | 'holders';
 

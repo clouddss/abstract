@@ -2,6 +2,7 @@ import { apiClient } from '../client';
 import {
   CreateTokenRequest,
   CreateTokenResponse,
+  LaunchTokenResponse,
   GetTokensParams,
   GetTokensResponse,
   TokenDetails,
@@ -35,14 +36,8 @@ export class TokensService {
   /**
    * Launch a new token - returns transaction data for wallet signing
    */
-  async launchToken(data: CreateTokenRequest): Promise<{
-    to: string;
-    data: string;
-    value: string;
-    launchFee: string;
-    message: string;
-  }> {
-    return apiClient.post('/tokens/launch', data);
+  async launchToken(data: CreateTokenRequest): Promise<LaunchTokenResponse> {
+    return apiClient.post<LaunchTokenResponse>('/tokens/launch', data);
   }
 
   /**
