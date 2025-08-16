@@ -20,9 +20,9 @@ export default async function (hre: HardhatRuntimeEnvironment) {
   console.log("=" .repeat(60));
 
   // Initialize wallet from private key
-  const privateKey = process.env.PRIVATE_KEY;
+  const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
   if (!privateKey) {
-    throw new Error("Please set PRIVATE_KEY in your .env file");
+    throw new Error("Please set DEPLOYER_PRIVATE_KEY in your .env file");
   }
 
   const wallet = new Wallet(privateKey);
