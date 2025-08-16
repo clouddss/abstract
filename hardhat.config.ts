@@ -10,7 +10,7 @@ const config: HardhatUserConfig = {
         enabled: true,
         runs: 1,
       },
-      viaIR: false,
+      viaIR: true,
     },
   },
   networks: {
@@ -21,6 +21,7 @@ const config: HardhatUserConfig = {
       url: process.env.ABSTRACT_RPC_URL || "https://api.testnet.abs.xyz",
       accounts: process.env.DEPLOYER_PRIVATE_KEY ? [process.env.DEPLOYER_PRIVATE_KEY] : [],
       chainId: 11124,
+      allowUnlimitedContractSize: true,
     },
   },
   etherscan: {

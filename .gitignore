@@ -28,4 +28,5 @@ frontend/package-lock.json
 .env.example
 /artifacts
 /cache
-*.ts
+
+/typechain-types

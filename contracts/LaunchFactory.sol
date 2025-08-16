@@ -6,7 +6,6 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./interfaces/ILaunchFactory.sol";
 import "./BaseToken.sol";
 import "./BondingCurve.sol";
-import "./libraries/LaunchFactoryLib.sol";
 
 /**
  * @title LaunchFactory
@@ -14,7 +13,7 @@ import "./libraries/LaunchFactoryLib.sol";
  * @dev Uses minimal proxy pattern for gas-efficient deployments
  */
 contract LaunchFactory is ILaunchFactory, Ownable, ReentrancyGuard {
-    using LaunchFactoryLib for string;
+    
     /// @notice Launch fee required for creating new tokens
     uint256 public launchFee = 0.01 ether;
 
@@ -82,8 +81,8 @@ contract LaunchFactory is ILaunchFactory, Ownable, ReentrancyGuard {
         require(bytes(metadata.symbol).length > 0, "Token symbol required");
         require(bytes(metadata.symbol).length <= 10, "Token symbol too long");
         
-        // Validate metadata URLs (basic validation)
-        _validateMetadata(metadata);
+        // Basic validation (detailed validation done off-chain)
+        require(bytes(metadata.description).length <= 500, "Description too long");
 
         // Generate deterministic salt for CREATE2
         bytes32 salt = keccak256(abi.encodePacked(
@@ -94,7 +93,7 @@ contract LaunchFactory is ILaunchFactory, Ownable, ReentrancyGuard {
             allTokens.length
         ));
 
-        // Deploy token first with factory as temporary owner
+        // Deploy token contract
         tokenAddress = address(new BaseToken{salt: keccak256(abi.encodePacked(salt, "token"))}(
             metadata.name,
             metadata.symbol,
@@ -106,10 +105,10 @@ contract LaunchFactory is ILaunchFactory, Ownable, ReentrancyGuard {
                 telegram: metadata.telegram
             }),
             address(this), // Factory as temporary owner
-            address(this) // Temporarily use factory address
+            address(0) // Will be updated after bonding curve deployment
         ));
 
-        // Deploy bonding curve with correct token address
+        // Deploy bonding curve contract
         bondingCurve = address(new BondingCurve{salt: salt}(
             tokenAddress,
             msg.sender,
@@ -235,23 +234,4 @@ contract LaunchFactory is ILaunchFactory, Ownable, ReentrancyGuard {
         emit PlatformTreasuryUpdated(oldTreasury, newTreasury);
     }
 
-    /**
-     * @notice Validate token metadata
-     * @param metadata Metadata to validate
-     */
-    function _validateMetadata(TokenMetadata calldata metadata) internal pure {
-        // Basic URL validation (check if starts with http)
-        if (bytes(metadata.imageUrl).length > 0) {
-            require(LaunchFactoryLib.isValidUrl(metadata.imageUrl), "Invalid image URL");
-        }
-        if (bytes(metadata.website).length > 0) {
-            require(LaunchFactoryLib.isValidUrl(metadata.website), "Invalid website URL");
-        }
-        if (bytes(metadata.twitter).length > 0) {
-            require(LaunchFactoryLib.isValidTwitter(metadata.twitter), "Invalid Twitter handle");
-        }
-        if (bytes(metadata.telegram).length > 0) {
-            require(LaunchFactoryLib.isValidTelegram(metadata.telegram), "Invalid Telegram handle");
-        }
-    }
 }

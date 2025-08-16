@@ -1,0 +1,380 @@
+import { Router, Request, Response } from 'express';
+import { z } from 'zod';
+import { ethers } from 'ethers';
+import { prisma } from '../../database/client';
+import { validateRequest } from '../middleware/validation';
+import { authMiddleware } from '../middleware/auth';
+import { getProvider, BONDING_CURVE_ABI } from '../../contracts/LaunchFactory';
+
+const router = Router();
+
+// Validation schemas
+const estimateTradeSchema = z.object({
+  body: z.object({
+    tokenAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+    tradeType: z.enum(['buy', 'sell']),
+    amount: z.string(), // ETH amount for buy, token amount for sell
+  })
+});
+
+const executeTradeSchema = z.object({
+  body: z.object({
+    tokenAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+    tradeType: z.enum(['buy', 'sell']),
+    amount: z.string(),
+    minOutput: z.string(), // Slippage protection
+    txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/).optional() // For confirmation
+  })
+});
+
+/**
+ * POST /api/trades/estimate
+ * Estimate trade output and price impact
+ */
+router.post('/estimate', validateRequest(estimateTradeSchema), async (req: Request, res: Response) => {
+  try {
+    const { tokenAddress, tradeType, amount } = req.body;
+
+    // Get token info
+    const token = await prisma.token.findUnique({
+      where: { address: tokenAddress.toLowerCase() }
+    });
+
+    if (!token) {
+      return res.status(404).json({
+        success: false,
+        error: 'Token not found'
+      });
+    }
+
+    if (token.migrated) {
+      return res.status(400).json({
+        success: false,
+        error: 'Token has migrated to DEX. Use DEX for trading.'
+      });
+    }
+
+    // Get bonding curve contract
+    const provider = getProvider();
+    const bondingCurve = new ethers.Contract(
+      token.bondingCurve,
+      BONDING_CURVE_ABI,
+      provider
+    );
+
+    let output: string;
+    let priceImpact: string;
+    let newPrice: string;
+    let fee: string;
+
+    if (tradeType === 'buy') {
+      // Calculate tokens out for ETH amount
+      const ethAmount = ethers.parseEther(amount);
+      const tokensOut = await bondingCurve.calculateTokensOut(ethAmount);
+      
+      // Get current price
+      const currentPrice = await bondingCurve.getCurrentPrice();
+      
+      // Calculate fee (1% total - 0.5% platform, 0.5% creator)
+      const feeAmount = (ethAmount * 100n) / 10000n;
+      
+      output = ethers.formatEther(tokensOut);
+      fee = ethers.formatEther(feeAmount);
+      
+      // Estimate new price after trade
+      const currentStats = await bondingCurve.getCurveStats();
+      const newSupply = currentStats.tokensSold_ + tokensOut;
+      
+      // Simple linear approximation for price impact
+      const supplyRatio = Number(tokensOut) / Number(currentStats.tokensSold_ || 1n);
+      priceImpact = (supplyRatio * 100).toFixed(2);
+      
+      newPrice = ethers.formatEther(currentPrice);
+      
+    } else {
+      // Calculate ETH out for token amount
+      const tokenAmount = ethers.parseEther(amount);
+      const ethOut = await bondingCurve.calculateEthOut(tokenAmount);
+      
+      // Get current price
+      const currentPrice = await bondingCurve.getCurrentPrice();
+      
+      // Calculate fee
+      const feeAmount = (ethOut * 100n) / 10000n;
+      
+      output = ethers.formatEther(ethOut);
+      fee = ethers.formatEther(feeAmount);
+      
+      // Estimate price impact
+      const currentStats = await bondingCurve.getCurveStats();
+      const supplyRatio = Number(tokenAmount) / Number(currentStats.tokensSold_ || 1n);
+      priceImpact = (supplyRatio * 100).toFixed(2);
+      
+      newPrice = ethers.formatEther(currentPrice);
+    }
+
+    res.json({
+      success: true,
+      data: {
+        tokenAddress,
+        tradeType,
+        inputAmount: amount,
+        outputAmount: output,
+        priceImpact,
+        currentPrice: newPrice,
+        fee,
+        minimumReceived: output, // In production, subtract slippage
+        executionPrice: newPrice
+      }
+    });
+
+  } catch (error) {
+    console.error('Error estimating trade:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to estimate trade'
+    });
+  }
+});
+
+/**
+ * GET /api/trades/price/:tokenAddress
+ * Get current token price and stats
+ */
+router.get('/price/:tokenAddress', async (req: Request, res: Response) => {
+  try {
+    const { tokenAddress } = req.params;
+
+    // Get token info
+    const token = await prisma.token.findUnique({
+      where: { address: tokenAddress.toLowerCase() }
+    });
+
+    if (!token) {
+      return res.status(404).json({
+        success: false,
+        error: 'Token not found'
+      });
+    }
+
+    // Get bonding curve contract
+    const provider = getProvider();
+    const bondingCurve = new ethers.Contract(
+      token.bondingCurve,
+      BONDING_CURVE_ABI,
+      provider
+    );
+
+    // Get current stats
+    const stats = await bondingCurve.getCurveStats();
+    const progress = await bondingCurve.getCurveProgress();
+    
+    res.json({
+      success: true,
+      data: {
+        tokenAddress,
+        currentPrice: ethers.formatEther(stats.currentPrice),
+        tokensSold: ethers.formatEther(stats.tokensSold_),
+        tokensRemaining: ethers.formatEther(stats.tokensRemaining),
+        reserveBalance: ethers.formatEther(stats.reserveBalance_),
+        marketCap: ethers.formatEther(stats.marketCap),
+        progressPercent: Number(progress.progressBps) / 100,
+        isCompleted: stats.completed_,
+        isMigrated: token.migrated
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching price:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch price'
+    });
+  }
+});
+
+/**
+ * POST /api/trades/prepare
+ * Prepare trade transaction data
+ */
+router.post('/prepare', authMiddleware, validateRequest(executeTradeSchema), async (req: Request, res: Response) => {
+  try {
+    const { tokenAddress, tradeType, amount, minOutput } = req.body;
+
+    // Get token info
+    const token = await prisma.token.findUnique({
+      where: { address: tokenAddress.toLowerCase() }
+    });
+
+    if (!token) {
+      return res.status(404).json({
+        success: false,
+        error: 'Token not found'
+      });
+    }
+
+    let to: string;
+    let data: string;
+    let value: string;
+
+    const bondingCurveAddress = token.bondingCurve;
+    const iface = new ethers.Interface(BONDING_CURVE_ABI);
+
+    if (tradeType === 'buy') {
+      // Prepare buy transaction
+      const ethAmount = ethers.parseEther(amount);
+      const minTokensOut = ethers.parseEther(minOutput);
+      
+      to = bondingCurveAddress;
+      data = iface.encodeFunctionData('buyTokens', [minTokensOut]);
+      value = ethAmount.toString();
+      
+    } else {
+      // Prepare sell transaction
+      const tokenAmount = ethers.parseEther(amount);
+      const minEthOut = ethers.parseEther(minOutput);
+      
+      to = bondingCurveAddress;
+      data = iface.encodeFunctionData('sellTokens', [tokenAmount, minEthOut]);
+      value = '0';
+    }
+
+    res.json({
+      success: true,
+      data: {
+        to,
+        data,
+        value,
+        tradeType,
+        message: `Please sign the ${tradeType} transaction in your wallet`
+      }
+    });
+
+  } catch (error) {
+    console.error('Error preparing trade:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to prepare trade'
+    });
+  }
+});
+
+/**
+ * POST /api/trades/confirm
+ * Confirm trade after transaction is mined
+ */
+router.post('/confirm', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { txHash, tokenAddress, tradeType } = req.body;
+
+    // Get provider and wait for transaction
+    const provider = getProvider();
+    const receipt = await provider.getTransactionReceipt(txHash);
+
+    if (!receipt) {
+      return res.status(400).json({
+        success: false,
+        error: 'Transaction not found'
+      });
+    }
+
+    if (receipt.status !== 1) {
+      return res.status(400).json({
+        success: false,
+        error: 'Transaction failed'
+      });
+    }
+
+    // Parse events to get trade details
+    const iface = new ethers.Interface(BONDING_CURVE_ABI);
+    let tradeData: any = null;
+
+    for (const log of receipt.logs) {
+      try {
+        const parsed = iface.parseLog({
+          topics: log.topics as string[],
+          data: log.data
+        });
+
+        if (parsed && (parsed.name === 'TokensPurchased' || parsed.name === 'TokensSold')) {
+          tradeData = {
+            type: parsed.name === 'TokensPurchased' ? 'buy' : 'sell',
+            user: parsed.args[0],
+            ethAmount: ethers.formatEther(parsed.args[1]),
+            tokenAmount: ethers.formatEther(parsed.args[2]),
+            newPrice: ethers.formatEther(parsed.args[3])
+          };
+          break;
+        }
+      } catch (e) {
+        // Not our event
+      }
+    }
+
+    if (!tradeData) {
+      return res.status(400).json({
+        success: false,
+        error: 'Trade event not found in transaction'
+      });
+    }
+
+    // Update token stats in database
+    const token = await prisma.token.findUnique({
+      where: { address: tokenAddress.toLowerCase() }
+    });
+
+    if (token) {
+      // Get updated stats from bonding curve
+      const bondingCurve = new ethers.Contract(
+        token.bondingCurve,
+        BONDING_CURVE_ABI,
+        provider
+      );
+      
+      const stats = await bondingCurve.getCurveStats();
+      
+      await prisma.token.update({
+        where: { address: tokenAddress.toLowerCase() },
+        data: {
+          soldSupply: stats.tokensSold_.toString(),
+          marketCap: stats.marketCap.toString(),
+          txCount: { increment: 1 }
+        }
+      });
+
+      // Record trade in database
+      await prisma.trade.create({
+        data: {
+          tokenAddress: tokenAddress.toLowerCase(),
+          trader: req.user!.address.toLowerCase(),
+          type: tradeType,
+          ethAmount: ethers.parseEther(tradeData.ethAmount).toString(),
+          tokenAmount: ethers.parseEther(tradeData.tokenAmount).toString(),
+          price: ethers.parseEther(tradeData.newPrice).toString(),
+          txHash,
+          blockNumber: receipt.blockNumber,
+          timestamp: new Date()
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...tradeData,
+        txHash,
+        blockNumber: receipt.blockNumber,
+        message: `${tradeType === 'buy' ? 'Purchase' : 'Sale'} completed successfully!`
+      }
+    });
+
+  } catch (error) {
+    console.error('Error confirming trade:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to confirm trade'
+    });
+  }
+});
+
+export default router;

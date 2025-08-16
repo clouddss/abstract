@@ -77,13 +77,13 @@ contract BaseToken is ERC20, ERC20Permit, Ownable, ReentrancyGuard {
         require(bytes(name_).length > 0, "Name cannot be empty");
         require(bytes(symbol_).length > 0, "Symbol cannot be empty");
         require(creator_ != address(0), "Invalid creator address");
-        require(bondingCurve_ != address(0), "Invalid bonding curve address");
 
         metadata = metadata_;
         bondingCurve = bondingCurve_;
 
-        // Mint entire supply to bonding curve
-        _mint(bondingCurve_, MAX_SUPPLY);
+        // Mint entire supply to bonding curve (or creator if bonding curve not set yet)
+        address mintTarget = bondingCurve_ != address(0) ? bondingCurve_ : creator_;
+        _mint(mintTarget, MAX_SUPPLY);
     }
 
     /**
@@ -104,10 +104,11 @@ contract BaseToken is ERC20, ERC20Permit, Ownable, ReentrancyGuard {
         require(newBondingCurve != address(0), "Invalid bonding curve address");
         require(!migrated, "Cannot update bonding curve after migration");
         
-        // Transfer all tokens from current bonding curve to new one
-        uint256 balance = balanceOf(bondingCurve);
+        // Transfer all tokens from current holder to new bonding curve
+        address currentHolder = bondingCurve != address(0) ? bondingCurve : owner();
+        uint256 balance = balanceOf(currentHolder);
         if (balance > 0) {
-            _transfer(bondingCurve, newBondingCurve, balance);
+            _transfer(currentHolder, newBondingCurve, balance);
         }
         
         bondingCurve = newBondingCurve;
