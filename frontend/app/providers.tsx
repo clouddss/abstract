@@ -6,7 +6,8 @@ import { RainbowKitProvider, darkTheme, Theme } from '@rainbow-me/rainbowkit'
 import '@rainbow-me/rainbowkit/styles.css'
 import { config } from '../lib/wagmi'
 import { WalletProvider } from '../providers/WalletProvider'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { setupGlobalErrorHandler } from '@/lib/utils/error-handling'
 
 // Custom Abstract theme for RainbowKit
 const abstractTheme: Theme = darkTheme({
@@ -31,9 +32,24 @@ export function Providers({ children }: { children: React.ReactNode }) {
       queries: {
         staleTime: 1000 * 60 * 5, // 5 minutes
         refetchOnWindowFocus: false,
+        retry: (failureCount, error) => {
+          // Don't retry on 4xx errors except 429 (rate limit)
+          if (error && typeof error === 'object' && 'status' in error) {
+            const status = (error as any).status;
+            if (status >= 400 && status < 500 && status !== 429) {
+              return false;
+            }
+          }
+          return failureCount < 3;
+        },
       },
     },
   }))
+
+  // Setup global error handlers
+  useEffect(() => {
+    setupGlobalErrorHandler();
+  }, []);
 
   return (
     <WagmiProvider config={config}>

@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
+import { useAccount, useWalletClient, usePublicClient, useChainId } from 'wagmi'
 import { parseEther } from 'viem'
 import { Button } from '@/components/ui/Button'
 import { tokensService } from '@/lib/api/services/tokens.service'
 import { useAuth } from '@/hooks/useAuth'
+import { isCorrectChain, ABSTRACT_TESTNET_ID, getChainName } from '@/lib/auth/utils'
 import { 
   Rocket, 
   Upload, 
@@ -27,6 +28,7 @@ export default function LaunchPage() {
   const { isConnected } = useAccount()
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient()
+  const chainId = useChainId()
   const { user } = useAuth()
   const [formData, setFormData] = useState({
     name: '',
@@ -40,13 +42,20 @@ export default function LaunchPage() {
   const [step, setStep] = useState(1)
   const [isLaunching, setIsLaunching] = useState(false)
   const [launchFee, setLaunchFee] = useState('0.01')
+  const [isLoadingFee, setIsLoadingFee] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     // Fetch current launch fee
+    setIsLoadingFee(true)
     tokensService.getLaunchFee().then(response => {
       setLaunchFee(response.feeFormatted)
-    }).catch(console.error)
+    }).catch(error => {
+      console.error('Failed to fetch launch fee:', error)
+      setError('Failed to fetch launch fee. Please try again.')
+    }).finally(() => {
+      setIsLoadingFee(false)
+    })
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -54,6 +63,12 @@ export default function LaunchPage() {
     
     if (!isConnected || !walletClient || !publicClient || !user) {
       setError('Please connect your wallet first')
+      return
+    }
+
+    // Check if user is on the correct chain
+    if (!chainId || !isCorrectChain(chainId)) {
+      setError(`Please switch to ${getChainName(ABSTRACT_TESTNET_ID)} to launch tokens`)
       return
     }
 
@@ -67,7 +82,7 @@ export default function LaunchPage() {
       console.log('Launch response:', launchResponse)
       
       // The API client returns the data directly
-      const { to, data, value } = launchResponse
+      const { to, data, value } = launchResponse.data || launchResponse
 
       // Step 2: Send transaction via wallet (let MetaMask estimate)
       console.log('Sending transaction...', { to, data, value })
@@ -103,14 +118,16 @@ export default function LaunchPage() {
     } catch (err: any) {
       console.error('Launch error:', err)
       // Check if it's an API error with more details
-      if (err.data && err.data.error) {
+      if (err?.data?.error) {
         setError(err.data.error)
-      } else if (err.data && err.data.details) {
+      } else if (err?.data?.details && Array.isArray(err.data.details)) {
         // Validation errors
-        const errors = err.data.details.map((d: any) => `${d.field}: ${d.message}`).join(', ')
+        const errors = err.data.details.map((d: any) => d?.field && d?.message ? `${d.field}: ${d.message}` : 'Invalid field').join(', ')
         setError(`Validation error: ${errors}`)
+      } else if (err?.message) {
+        setError(err.message)
       } else {
-        setError(err.message || 'Failed to launch token')
+        setError('Failed to launch token. Please try again.')
       }
     } finally {
       setIsLaunching(false)
@@ -267,7 +284,7 @@ export default function LaunchPage() {
                     Website
                   </label>
                   <input
-                    type="url"
+                    type="text"
                     className="w-full px-4 py-3 bg-secondary border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                     placeholder="https://yourtoken.com"
                     value={formData.website}
@@ -283,7 +300,7 @@ export default function LaunchPage() {
                   <input
                     type="text"
                     className="w-full px-4 py-3 bg-secondary border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                    placeholder="@yourtoken"
+                    placeholder="@yourtoken or https://twitter.com/yourtoken"
                     value={formData.twitter}
                     onChange={(e) => setFormData({...formData, twitter: e.target.value})}
                   />
@@ -297,7 +314,7 @@ export default function LaunchPage() {
                   <input
                     type="text"
                     className="w-full px-4 py-3 bg-secondary border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                    placeholder="@yourtokencommunity"
+                    placeholder="@yourtokencommunity or https://t.me/yourtokencommunity"
                     value={formData.telegram}
                     onChange={(e) => setFormData({...formData, telegram: e.target.value})}
                   />
@@ -369,7 +386,13 @@ export default function LaunchPage() {
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Launch Fee</span>
-                        <span className="font-semibold text-yellow-400">{launchFee} ETH</span>
+                        <span className="font-semibold text-yellow-400">
+                          {isLoadingFee ? (
+                            <div className="w-4 h-4 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin inline-block" />
+                          ) : (
+                            `${launchFee} ETH`
+                          )}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Platform Fee</span>
@@ -387,7 +410,11 @@ export default function LaunchPage() {
                   <div>
                     <h3 className="font-semibold mb-2 flex items-center">
                       <DollarSign className="h-4 w-4 mr-1 text-yellow-400" />
-                      Launch Fee: {launchFee} ETH
+                      Launch Fee: {isLoadingFee ? (
+                        <div className="w-4 h-4 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin inline-block ml-1" />
+                      ) : (
+                        `${launchFee} ETH`
+                      )}
                     </h3>
                     <p className="text-sm text-muted-foreground mb-4">
                       This one-time fee helps prevent spam and funds continued platform development. 
@@ -435,6 +462,18 @@ export default function LaunchPage() {
                 </div>
               )}
 
+              {/* Chain Check */}
+              {isConnected && chainId && !isCorrectChain(chainId) && (
+                <div className="glass-card rounded-lg p-4 border border-orange-500/20 bg-orange-500/10">
+                  <div className="flex items-center space-x-2">
+                    <AlertCircle className="h-5 w-5 text-orange-500" />
+                    <p className="text-orange-500">
+                      Wrong network detected. Please switch to {getChainName(ABSTRACT_TESTNET_ID)} to launch tokens.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-between">
                 <Button type="button" onClick={prevStep} variant="outline">
                   Previous
@@ -442,7 +481,7 @@ export default function LaunchPage() {
                 <Button 
                   type="submit" 
                   className="btn-gradient px-8 py-3"
-                  disabled={isLaunching || !isConnected}
+                  disabled={isLaunching || !isConnected || isLoadingFee || (chainId && !isCorrectChain(chainId))}
                 >
                   {isLaunching ? (
                     <div className="flex items-center space-x-2">

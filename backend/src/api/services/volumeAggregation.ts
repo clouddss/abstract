@@ -331,4 +331,160 @@ export class VolumeAggregationService {
       return { success: false, error: error.message };
     }
   }
+
+  /**
+   * PERFORMANCE CRITICAL: Refresh trending tokens materialized view
+   */
+  static async refreshTrendingTokensView() {
+    try {
+      await prisma.$executeRaw`REFRESH MATERIALIZED VIEW CONCURRENTLY trending_tokens_24h_mv`;
+      return { success: true, refreshedAt: new Date() };
+    } catch (error) {
+      console.error('Error refreshing trending tokens materialized view:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Refresh holder stats materialized view
+   */
+  static async refreshHolderStatsView() {
+    try {
+      await prisma.$executeRaw`REFRESH MATERIALIZED VIEW CONCURRENTLY holder_stats_mv`;
+      return { success: true, refreshedAt: new Date() };
+    } catch (error) {
+      console.error('Error refreshing holder stats materialized view:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * OPTIMIZED: Get trending tokens from materialized view
+   */
+  static async getTrendingTokensOptimized(limit: number = 10) {
+    const query = Prisma.sql`
+      SELECT 
+        address,
+        name,
+        symbol,
+        image_url,
+        volume_24h,
+        trade_count_24h,
+        unique_traders_24h,
+        progress_percent
+      FROM trending_tokens_24h_mv
+      WHERE volume_24h > 0
+      ORDER BY volume_24h DESC
+      LIMIT ${limit}
+    `;
+
+    return await prisma.$queryRaw<Array<{
+      address: string;
+      name: string;
+      symbol: string;
+      image_url: string | null;
+      volume_24h: number;
+      trade_count_24h: number;
+      unique_traders_24h: number;
+      progress_percent: number;
+    }>>(query);
+  }
+
+  /**
+   * OPTIMIZED: Get holder leaderboard from materialized view
+   */
+  static async getHolderLeaderboard(limit: number = 50) {
+    const query = Prisma.sql`
+      SELECT 
+        wallet,
+        token_count,
+        total_portfolio_value,
+        total_tokens_bought,
+        total_tokens_sold,
+        last_activity
+      FROM holder_stats_mv
+      ORDER BY total_portfolio_value DESC
+      LIMIT ${limit}
+    `;
+
+    return await prisma.$queryRaw<Array<{
+      wallet: string;
+      token_count: number;
+      total_portfolio_value: number;
+      total_tokens_bought: number;
+      total_tokens_sold: number;
+      last_activity: Date;
+    }>>(query);
+  }
+
+  /**
+   * BATCH OPTIMIZATION: Calculate volume metrics for multiple tokens in single query
+   */
+  static async batchCalculateTokenVolumes(tokenAddresses: string[]) {
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const query = Prisma.sql`
+      SELECT 
+        token_address,
+        COALESCE(SUM(
+          CASE 
+            WHEN timestamp >= ${oneDayAgo} THEN 
+              CASE 
+                WHEN type = 'BUY' THEN amount_in::numeric 
+                ELSE amount_out::numeric 
+              END
+            ELSE 0
+          END
+        ), 0) as volume_24h,
+        
+        COALESCE(SUM(
+          CASE 
+            WHEN timestamp >= ${sevenDaysAgo} THEN 
+              CASE 
+                WHEN type = 'BUY' THEN amount_in::numeric 
+                ELSE amount_out::numeric 
+              END
+            ELSE 0
+          END
+        ), 0) as volume_7d,
+        
+        COALESCE(SUM(
+          CASE 
+            WHEN type = 'BUY' THEN amount_in::numeric 
+            ELSE amount_out::numeric 
+          END
+        ), 0) as volume_total,
+        
+        COUNT(
+          CASE 
+            WHEN timestamp >= ${oneDayAgo} THEN 1 
+            ELSE NULL 
+          END
+        ) as tx_count_24h,
+        
+        COUNT(*) as tx_count_total,
+        
+        COUNT(DISTINCT 
+          CASE 
+            WHEN timestamp >= ${oneDayAgo} THEN trader 
+            ELSE NULL 
+          END
+        ) as unique_traders_24h
+        
+      FROM trades 
+      WHERE token_address = ANY(${tokenAddresses})
+      GROUP BY token_address
+    `;
+
+    return await prisma.$queryRaw<Array<{
+      token_address: string;
+      volume_24h: string;
+      volume_7d: string;
+      volume_total: string;
+      tx_count_24h: bigint;
+      tx_count_total: bigint;
+      unique_traders_24h: bigint;
+    }>>(query);
+  }
 }

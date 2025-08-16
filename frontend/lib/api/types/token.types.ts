@@ -66,6 +66,7 @@ export interface TokenHolder {
   firstBought: string;
   lastActivity: string;
   isBondingCurve?: boolean;
+  isLiquidity?: boolean;
 }
 
 export interface TokenTrade {

@@ -50,7 +50,7 @@ const configSchema = z.object({
   PINATA_SECRET_KEY: z.string().optional(),
   
   // Security
-  JWT_SECRET: z.string().optional(),
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   JWT_EXPIRATION: z.string().default('7d'),
   ENCRYPTION_KEY: z.string().optional(),
   CORS_ORIGIN: z.string().default('*'),

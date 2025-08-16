@@ -3,6 +3,7 @@ import { prisma } from '../../database/client';
 import { getBlockTimestamp, calculateTokenPrice } from '../ethereum';
 import { TradeType } from '@prisma/client';
 import { chartService } from '../../services/chartService';
+import { wsEvents } from '../../websocket/events';
 
 export interface TokensPurchasedEvent {
   buyer: string;
@@ -55,10 +56,20 @@ export async function handleTokensPurchased(event: TokensPurchasedEvent): Promis
     });
 
     // Update or create holder record
-    await updateHolderRecord(event.tokenAddress, event.buyer, event.tokenAmount, true, timestamp);
+    const holderUpdate = await updateHolderRecord(event.tokenAddress, event.buyer, event.tokenAmount, true, timestamp);
+    
+    // Emit holder update event
+    if (holderUpdate) {
+      wsEvents.emitHolderUpdate(holderUpdate);
+    }
 
     // Update token statistics
-    await updateTokenStats(event.tokenAddress, event.ethAmount, event.tokenAmount, timestamp);
+    const tokenStatsUpdate = await updateTokenStats(event.tokenAddress, event.ethAmount, event.tokenAmount, timestamp, 'BUY');
+    
+    // Emit token update event
+    if (tokenStatsUpdate) {
+      wsEvents.emitTokenUpdate(event.tokenAddress, tokenStatsUpdate);
+    }
 
     // Update platform statistics
     await updatePlatformTradeStats(event.ethAmount, feeAmount.toString(), timestamp);
@@ -68,6 +79,23 @@ export async function handleTokensPurchased(event: TokensPurchasedEvent): Promis
     
     // Update chart data using chartService
     await chartService.updateChartDataForTrade(trade);
+
+    // Emit WebSocket events
+    wsEvents.emitNewTrade({
+      id: trade.id,
+      tokenAddress: event.tokenAddress,
+      trader: event.buyer,
+      type: 'BUY',
+      amountIn: event.ethAmount,
+      amountOut: event.tokenAmount,
+      price: event.newPrice,
+      feeAmount: feeAmount.toString(),
+      txHash: event.txHash,
+      timestamp
+    });
+
+    // Emit price update
+    wsEvents.emitPriceUpdate(event.tokenAddress, event.newPrice, event.ethAmount);
 
     console.log(`✅ Purchase processed: Trade ID ${trade.id}`);
 
@@ -106,10 +134,20 @@ export async function handleTokensSold(event: TokensSoldEvent): Promise<void> {
     });
 
     // Update holder record
-    await updateHolderRecord(event.tokenAddress, event.seller, event.tokenAmount, false, timestamp);
+    const holderUpdate = await updateHolderRecord(event.tokenAddress, event.seller, event.tokenAmount, false, timestamp);
+    
+    // Emit holder update event
+    if (holderUpdate) {
+      wsEvents.emitHolderUpdate(holderUpdate);
+    }
 
     // Update token statistics
-    await updateTokenStats(event.tokenAddress, event.ethAmount, event.tokenAmount, timestamp);
+    const tokenStatsUpdate = await updateTokenStats(event.tokenAddress, event.ethAmount, event.tokenAmount, timestamp, 'SELL');
+    
+    // Emit token update event
+    if (tokenStatsUpdate) {
+      wsEvents.emitTokenUpdate(event.tokenAddress, tokenStatsUpdate);
+    }
 
     // Update platform statistics
     await updatePlatformTradeStats(event.ethAmount, feeAmount.toString(), timestamp);
@@ -119,6 +157,23 @@ export async function handleTokensSold(event: TokensSoldEvent): Promise<void> {
     
     // Update chart data using chartService
     await chartService.updateChartDataForTrade(trade);
+
+    // Emit WebSocket events
+    wsEvents.emitNewTrade({
+      id: trade.id,
+      tokenAddress: event.tokenAddress,
+      trader: event.seller,
+      type: 'SELL',
+      amountIn: event.tokenAmount,
+      amountOut: event.ethAmount,
+      price: event.newPrice,
+      feeAmount: feeAmount.toString(),
+      txHash: event.txHash,
+      timestamp
+    });
+
+    // Emit price update
+    wsEvents.emitPriceUpdate(event.tokenAddress, event.newPrice, event.ethAmount);
 
     console.log(`✅ Sale processed: Trade ID ${trade.id}`);
 
@@ -134,7 +189,7 @@ async function updateHolderRecord(
   tokenAmount: string,
   isBuy: boolean,
   timestamp: Date
-): Promise<void> {
+): Promise<{ tokenAddress: string; wallet: string; balance: string; totalBought: string; totalSold: string; isNewHolder?: boolean; isRemovedHolder?: boolean } | null> {
   const tokenAmountBig = BigInt(tokenAmount);
 
   try {
@@ -176,9 +231,17 @@ async function updateHolderRecord(
           updatedAt: timestamp
         }
       });
+
+      return {
+        tokenAddress,
+        wallet,
+        balance: newBalance.toString(),
+        totalBought: newTotalBought.toString(),
+        totalSold: newTotalSold.toString()
+      };
     } else {
       // Create new holder
-      await prisma.holder.create({
+      const newHolder = await prisma.holder.create({
         data: {
           tokenAddress,
           wallet,
@@ -193,6 +256,15 @@ async function updateHolderRecord(
           rewardsClaimed: "0"
         }
       });
+
+      return {
+        tokenAddress,
+        wallet,
+        balance: newHolder.balance,
+        totalBought: newHolder.totalBought,
+        totalSold: newHolder.totalSold,
+        isNewHolder: true
+      };
     }
 
     // Remove holder if balance reaches zero
@@ -205,8 +277,19 @@ async function updateHolderRecord(
         await prisma.holder.delete({
           where: { id: existingHolder.id }
         });
+        
+        return {
+          tokenAddress,
+          wallet,
+          balance: "0",
+          totalBought: updatedHolder.totalBought,
+          totalSold: updatedHolder.totalSold,
+          isRemovedHolder: true
+        };
       }
     }
+
+    return null;
 
   } catch (error) {
     console.error(`Error updating holder record for ${wallet}:`, error);
@@ -218,8 +301,9 @@ async function updateTokenStats(
   tokenAddress: string,
   ethAmount: string,
   tokenAmount: string,
-  timestamp: Date
-): Promise<void> {
+  timestamp: Date,
+  tradeType?: 'BUY' | 'SELL'
+): Promise<{ price?: string; volume24h?: string; volume7d?: string; volumeTotal?: string; marketCap?: string; holderCount?: number; soldSupply?: string } | null> {
   try {
     // Get current token
     const token = await prisma.token.findUnique({
@@ -228,7 +312,7 @@ async function updateTokenStats(
 
     if (!token) {
       console.error(`Token ${tokenAddress} not found`);
-      return;
+      return null;
     }
 
     // Update sold supply and volume
@@ -237,16 +321,28 @@ async function updateTokenStats(
     const currentSoldSupply = BigInt(token.soldSupply);
     const currentVolumeTotal = BigInt(token.volumeTotal);
 
-    // Calculate new market cap (approximate)
-    const newSoldSupply = currentSoldSupply + tokenAmountBig;
+    // FIXED: soldSupply should only increase on BUY trades, never decrease on SELL
+    // soldSupply represents total tokens ever sold from the bonding curve
+    const newSoldSupply = (tradeType === 'BUY') 
+      ? currentSoldSupply + tokenAmountBig 
+      : currentSoldSupply; // Don't change on sells
+    
     const currentPrice = calculateTokenPrice(ethAmountBig, tokenAmountBig);
-    const marketCap = (newSoldSupply * BigInt(ethers.parseEther(currentPrice))) / BigInt(ethers.parseEther("1"));
+    
+    // FIXED: Market cap should use circulating supply (soldSupply), not newSoldSupply for sells
+    const circulatingSupply = newSoldSupply;
+    const marketCap = circulatingSupply > 0n 
+      ? (circulatingSupply * BigInt(ethers.parseEther(currentPrice))) / BigInt(ethers.parseEther("1"))
+      : 0n;
+    
+    // FIXED: Volume should always be positive (use absolute value)
+    const newVolumeTotal = (currentVolumeTotal + (ethAmountBig > 0n ? ethAmountBig : -ethAmountBig)).toString();
 
     await prisma.token.update({
       where: { address: tokenAddress },
       data: {
         soldSupply: newSoldSupply.toString(),
-        volumeTotal: (currentVolumeTotal + ethAmountBig).toString(),
+        volumeTotal: newVolumeTotal,
         marketCap: marketCap.toString(),
         updatedAt: timestamp
       }
@@ -257,6 +353,25 @@ async function updateTokenStats(
 
     // Update holder count
     await updateTokenHolderCount(tokenAddress);
+
+    // Get updated token data
+    const updatedToken = await prisma.token.findUnique({
+      where: { address: tokenAddress }
+    });
+
+    if (updatedToken) {
+      return {
+        price: currentPrice,
+        volume24h: updatedToken.volume24h,
+        volume7d: updatedToken.volume7d,
+        volumeTotal: updatedToken.volumeTotal,
+        marketCap: updatedToken.marketCap,
+        holderCount: updatedToken.holderCount,
+        soldSupply: updatedToken.soldSupply
+      };
+    }
+
+    return null;
 
   } catch (error) {
     console.error(`Error updating token stats for ${tokenAddress}:`, error);
@@ -287,7 +402,9 @@ async function updateTokenVolumeWindows(
     });
 
     const volume24h = trades24h.reduce((sum, trade) => {
-      return sum + BigInt(trade.type === TradeType.BUY ? trade.amountIn : trade.amountOut);
+      // FIXED: Use absolute values to ensure volume is always positive
+      const tradeVolume = BigInt(trade.type === TradeType.BUY ? trade.amountIn : trade.amountOut);
+      return sum + (tradeVolume > 0n ? tradeVolume : -tradeVolume);
     }, 0n);
 
     // Calculate 7d volume
@@ -299,7 +416,9 @@ async function updateTokenVolumeWindows(
     });
 
     const volume7d = trades7d.reduce((sum, trade) => {
-      return sum + BigInt(trade.type === TradeType.BUY ? trade.amountIn : trade.amountOut);
+      // FIXED: Use absolute values to ensure volume is always positive
+      const tradeVolume = BigInt(trade.type === TradeType.BUY ? trade.amountIn : trade.amountOut);
+      return sum + (tradeVolume > 0n ? tradeVolume : -tradeVolume);
     }, 0n);
 
     await prisma.token.update({
@@ -355,10 +474,13 @@ async function updatePlatformTradeStats(
       const currentVolume24h = BigInt(existingStats.volume24h);
       const currentFees24h = BigInt(existingStats.fees24h);
       
-      const newTotalVolume = currentTotalVolume + BigInt(ethAmount);
-      const newTotalFees = currentTotalFees + BigInt(feeAmount);
-      const newVolume24h = currentVolume24h + BigInt(ethAmount);
-      const newFees24h = currentFees24h + BigInt(feeAmount);
+      // FIXED: Use absolute values to ensure volume is always positive
+      const ethAmountValue = BigInt(ethAmount);
+      const feeAmountValue = BigInt(feeAmount);
+      const newTotalVolume = currentTotalVolume + (ethAmountValue > 0n ? ethAmountValue : -ethAmountValue);
+      const newTotalFees = currentTotalFees + (feeAmountValue > 0n ? feeAmountValue : -feeAmountValue);
+      const newVolume24h = currentVolume24h + (ethAmountValue > 0n ? ethAmountValue : -ethAmountValue);
+      const newFees24h = currentFees24h + (feeAmountValue > 0n ? feeAmountValue : -feeAmountValue);
 
       await prisma.platformStats.update({
         where: { date: today },

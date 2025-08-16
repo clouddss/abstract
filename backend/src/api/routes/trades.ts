@@ -454,37 +454,20 @@ async function calculateVolumeMetrics(tokenAddress: string, ethAmount: string, t
 }
 
 /**
- * Update holder information with proper balance tracking
+ * Update holder information with atomic balance tracking (Race condition safe)
  */
 async function updateHolderBalance(
   tokenAddress: string,
   holderAddress: string,
   tokenAmount: string,
   isBuy: boolean,
-  timestamp: Date
+  timestamp: Date,
+  tx?: any // Optional transaction context
 ) {
-  const tokenAmountBig = BigInt(tokenAmount);
+  const prismaClient = tx || prisma;
   
-  // Get current holder to calculate new balances
-  const currentHolder = await prisma.holder.findUnique({
-    where: {
-      tokenAddress_wallet: {
-        tokenAddress: tokenAddress.toLowerCase(),
-        wallet: holderAddress.toLowerCase()
-      }
-    }
-  });
-
-  const currentBalance = BigInt(currentHolder?.balance || '0');
-  const currentTotalBought = BigInt(currentHolder?.totalBought || '0');
-  const currentTotalSold = BigInt(currentHolder?.totalSold || '0');
-
-  const newBalance = isBuy ? currentBalance + tokenAmountBig : currentBalance - tokenAmountBig;
-  const newTotalBought = isBuy ? currentTotalBought + tokenAmountBig : currentTotalBought;
-  const newTotalSold = !isBuy ? currentTotalSold + tokenAmountBig : currentTotalSold;
-
-  // Use upsert for atomic operation
-  const holder = await prisma.holder.upsert({
+  // Use atomic increment/decrement operations to prevent race conditions
+  const holder = await prismaClient.holder.upsert({
     where: {
       tokenAddress_wallet: {
         tokenAddress: tokenAddress.toLowerCase(),
@@ -492,9 +475,16 @@ async function updateHolderBalance(
       }
     },
     update: {
-      balance: newBalance.toString(),
-      totalBought: newTotalBought.toString(),
-      totalSold: newTotalSold.toString(),
+      // Use atomic increment/decrement for balance
+      balance: isBuy 
+        ? { increment: tokenAmount }
+        : { decrement: tokenAmount },
+      totalBought: isBuy 
+        ? { increment: tokenAmount }
+        : undefined,
+      totalSold: !isBuy 
+        ? { increment: tokenAmount }
+        : undefined,
       lastActivity: timestamp,
       updatedAt: timestamp
     },
@@ -513,12 +503,19 @@ async function updateHolderBalance(
     }
   });
 
-  // If selling and balance becomes zero or negative, remove the holder
-  if (!isBuy && newBalance <= 0n) {
-    await prisma.holder.delete({
-      where: { id: holder.id }
+  // If selling, check if balance becomes zero or negative and remove holder
+  if (!isBuy) {
+    const updatedHolder = await prismaClient.holder.findUnique({
+      where: { id: holder.id },
+      select: { balance: true }
     });
-    return null;
+    
+    if (updatedHolder && BigInt(updatedHolder.balance) <= 0n) {
+      await prismaClient.holder.delete({
+        where: { id: holder.id }
+      });
+      return null;
+    }
   }
 
   return holder;
@@ -582,20 +579,25 @@ async function calculateMarketCap(tokenAddress: string, bondingCurveAddress: str
 }
 
 /**
- * Update holder count efficiently
+ * Update holder count efficiently with atomic operations
  */
-async function updateHolderCount(tokenAddress: string) {
-  const holderCount = await prisma.holder.count({
+async function updateHolderCount(tokenAddress: string, tx?: any) {
+  const prismaClient = tx || prisma;
+  
+  const holderCount = await prismaClient.holder.count({
     where: {
       tokenAddress: tokenAddress.toLowerCase(),
       balance: { gt: '0' }
     }
   });
 
-  await prisma.token.update({
-    where: { address: tokenAddress.toLowerCase() },
-    data: { holderCount }
-  });
+  if (!tx) {
+    // Only update token if not within a transaction (to avoid redundant updates)
+    await prismaClient.token.update({
+      where: { address: tokenAddress.toLowerCase() },
+      data: { holderCount }
+    });
+  }
 
   return holderCount;
 }
@@ -677,7 +679,7 @@ router.post('/confirm', authMiddleware, async (req: Request, res: Response) => {
     const isBuy = tradeType === 'buy' || tradeType === TradeType.BUY;
     const feeAmount = (BigInt(ethAmount) * 100n) / 10000n; // 1% fee
 
-    // Use database transaction for atomicity
+    // Use database transaction for atomicity - include ALL critical operations
     const result = await prisma.$transaction(async (tx) => {
       // 1. Create trade record
       const trade = await tx.trade.create({
@@ -698,7 +700,63 @@ router.post('/confirm', authMiddleware, async (req: Request, res: Response) => {
         }
       });
 
-      // 2. Calculate volume metrics efficiently with caching
+      // 2. Get current holder data first
+      const tokenAmountBig = BigInt(tokenAmount);
+      const existingHolder = await tx.holder.findUnique({
+        where: {
+          tokenAddress_wallet: {
+            tokenAddress: tokenAddress.toLowerCase(),
+            wallet: req.user!.address.toLowerCase()
+          }
+        }
+      });
+
+      // Calculate new balances
+      const currentBalance = existingHolder ? BigInt(existingHolder.balance) : 0n;
+      const currentTotalBought = existingHolder ? BigInt(existingHolder.totalBought) : 0n;
+      const currentTotalSold = existingHolder ? BigInt(existingHolder.totalSold) : 0n;
+
+      const newBalance = isBuy 
+        ? currentBalance + tokenAmountBig
+        : currentBalance - tokenAmountBig;
+      const newTotalBought = isBuy 
+        ? currentTotalBought + tokenAmountBig
+        : currentTotalBought;
+      const newTotalSold = !isBuy 
+        ? currentTotalSold + tokenAmountBig
+        : currentTotalSold;
+
+      // 3. Update holder balance atomically within transaction
+      const holder = await tx.holder.upsert({
+        where: {
+          tokenAddress_wallet: {
+            tokenAddress: tokenAddress.toLowerCase(),
+            wallet: req.user!.address.toLowerCase()
+          }
+        },
+        update: {
+          balance: newBalance.toString(),
+          totalBought: newTotalBought.toString(),
+          totalSold: newTotalSold.toString(),
+          lastActivity: timestamp,
+          updatedAt: timestamp
+        },
+        create: {
+          tokenAddress: tokenAddress.toLowerCase(),
+          wallet: req.user!.address.toLowerCase(),
+          balance: isBuy ? tokenAmount : '0',
+          totalBought: isBuy ? tokenAmount : '0',
+          totalSold: !isBuy ? tokenAmount : '0',
+          firstBoughtAt: isBuy ? timestamp : null,
+          lastActivity: timestamp,
+          avgHoldTime: 0,
+          realizedPnl: '0',
+          unrealizedPnl: '0',
+          rewardsClaimed: '0'
+        }
+      });
+
+      // 3. Calculate volume metrics efficiently with caching
       // Invalidate cache first to ensure fresh calculation
       invalidateVolumeCache(tokenAddress);
       
@@ -708,20 +766,27 @@ router.post('/confirm', authMiddleware, async (req: Request, res: Response) => {
         timestamp
       );
 
-      // 3. Calculate market cap based on actual circulating supply
+      // 4. Calculate market cap based on actual circulating supply
       const marketCapData = await calculateMarketCap(
         tokenAddress,
         token.bondingCurve
       );
 
-      // 4. Update sold supply
-      const tokenAmountBig = BigInt(tokenAmount);
+      // 5. Update sold supply
       const currentSoldSupply = BigInt(token.soldSupply);
       const newSoldSupply = isBuy 
         ? currentSoldSupply + tokenAmountBig
         : currentSoldSupply; // Sells don't change total sold supply
 
-      // 5. Update token stats
+      // 6. Calculate holder count atomically
+      const holderCount = await tx.holder.count({
+        where: {
+          tokenAddress: tokenAddress.toLowerCase(),
+          balance: { gt: '0' }
+        }
+      });
+
+      // 7. Update token stats
       await tx.token.update({
         where: { address: tokenAddress.toLowerCase() },
         data: {
@@ -731,24 +796,30 @@ router.post('/confirm', authMiddleware, async (req: Request, res: Response) => {
           volumeTotal: volumeMetrics.volumeTotal,
           volume24h: volumeMetrics.volume24h,
           volume7d: volumeMetrics.volume7d,
+          holderCount,
           updatedAt: timestamp
         }
       });
 
-      return { trade, volumeMetrics, marketCapData };
+      // 8. Delete holder if balance becomes zero or negative after sell
+      if (!isBuy) {
+        const updatedHolder = await tx.holder.findUnique({
+          where: { id: holder.id },
+          select: { balance: true }
+        });
+        
+        if (updatedHolder && BigInt(updatedHolder.balance) <= 0n) {
+          await tx.holder.delete({
+            where: { id: holder.id }
+          });
+        }
+      }
+
+      return { trade, volumeMetrics, marketCapData, holderCount };
+    }, {
+      timeout: 10000, // 10 second timeout for complex transaction
+      isolationLevel: 'Serializable' // Highest isolation level for consistency
     });
-
-    // 6. Update holder balance (outside transaction to avoid deadlocks)
-    await updateHolderBalance(
-      tokenAddress,
-      req.user!.address,
-      tokenAmount,
-      isBuy,
-      timestamp
-    );
-
-    // 7. Update holder count
-    const holderCount = await updateHolderCount(tokenAddress);
 
     res.json({
       success: true,
@@ -758,7 +829,7 @@ router.post('/confirm', authMiddleware, async (req: Request, res: Response) => {
         blockNumber: receipt.blockNumber,
         volumeMetrics: result.volumeMetrics,
         marketCap: result.marketCapData.marketCap,
-        holderCount,
+        holderCount: result.holderCount,
         message: `${tradeType === 'buy' ? 'Purchase' : 'Sale'} completed successfully!`
       }
     });

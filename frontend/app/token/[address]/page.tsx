@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { TradingInterface } from '@/components/TradingInterface'
 import { RecentTrades } from '@/components/RecentTrades'
+import { TradingErrorBoundary, ChartErrorBoundary } from '@/components/ErrorBoundary'
 import { 
   DollarSign, 
   Users, 
@@ -274,50 +275,52 @@ export default function TokenPage() {
           {/* Chart and Trading */}
           <div className="lg:col-span-2 space-y-6">
             {/* Price Chart */}
-            <div className="glass-card rounded-lg p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-semibold flex items-center">
-                  <BarChart3 className="h-5 w-5 mr-2 text-primary" />
-                  Price Chart
-                </h3>
-                <div className="flex items-center space-x-2">
-                  {[
-                    { value: ChartInterval.ONE_HOUR, label: '1h' },
-                    { value: ChartInterval.FOUR_HOURS, label: '4h' },
-                    { value: ChartInterval.ONE_DAY, label: '1d' },
-                    { value: ChartInterval.ONE_WEEK, label: '1w' }
-                  ].map(({ value, label }) => (
-                    <button
-                      key={value}
-                      onClick={() => setChartInterval(value)}
-                      className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                        chartInterval === value 
-                          ? 'bg-primary text-white' 
-                          : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
+            <ChartErrorBoundary>
+              <div className="glass-card rounded-lg p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-semibold flex items-center">
+                    <BarChart3 className="h-5 w-5 mr-2 text-primary" />
+                    Price Chart
+                  </h3>
+                  <div className="flex items-center space-x-2">
+                    {[
+                      { value: ChartInterval.ONE_HOUR, label: '1h' },
+                      { value: ChartInterval.FOUR_HOURS, label: '4h' },
+                      { value: ChartInterval.ONE_DAY, label: '1d' },
+                      { value: ChartInterval.ONE_WEEK, label: '1w' }
+                    ].map(({ value, label }) => (
+                      <button
+                        key={value}
+                        onClick={() => setChartInterval(value)}
+                        className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                          chartInterval === value 
+                            ? 'bg-primary text-white' 
+                            : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="relative h-64">
+                  {chartLoading ? (
+                    <div className="flex items-center justify-center h-full">
+                      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                    </div>
+                  ) : chartData && chartData.data.length > 0 ? (
+                    <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                      {/* TODO: Integrate proper charting library like recharts */}
+                      <p>Chart visualization coming soon</p>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-muted-foreground">
+                      <p>No chart data available</p>
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="relative h-64">
-                {chartLoading ? (
-                  <div className="flex items-center justify-center h-full">
-                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                  </div>
-                ) : chartData && chartData.data.length > 0 ? (
-                  <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                    {/* TODO: Integrate proper charting library like recharts */}
-                    <p>Chart visualization coming soon</p>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center h-full text-muted-foreground">
-                    <p>No chart data available</p>
-                  </div>
-                )}
-              </div>
-            </div>
+            </ChartErrorBoundary>
 
             {/* Bonding Curve Progress */}
             <div className="glass-card rounded-lg p-6">
@@ -358,17 +361,21 @@ export default function TokenPage() {
           <div className="space-y-6">
             {/* Trading Panel */}
             {!isLoading && token && (
-              <TradingInterface
-                tokenSymbol={token.symbol}
-                tokenAddress={tokenAddress}
-                currentPrice={currentPrice}
-                bondingCurve={token.bondingCurve}
-                className="glass-card"
-              />
+              <TradingErrorBoundary>
+                <TradingInterface
+                  tokenSymbol={token.symbol}
+                  tokenAddress={tokenAddress}
+                  currentPrice={currentPrice}
+                  bondingCurve={token.bondingCurve}
+                  className="glass-card"
+                />
+              </TradingErrorBoundary>
             )}
 
             {/* Recent Trades */}
-            <RecentTrades tokenAddress={tokenAddress} limit={5} />
+            <TradingErrorBoundary>
+              <RecentTrades tokenAddress={tokenAddress} limit={5} />
+            </TradingErrorBoundary>
 
             {/* Top Holders */}
             <div className="glass-card rounded-lg p-6">
@@ -396,13 +403,17 @@ export default function TokenPage() {
                       <div className="flex items-center space-x-3">
                         <span className="text-sm font-medium">#{index + 1}</span>
                         <span className="text-sm font-mono text-muted-foreground">
-                          {holder.isBondingCurve ? 'Bonding Curve' : formatAddress(holder.address)}
+                          {holder.isLiquidity ? 'Liquidity Pool' : 
+                           holder.isBondingCurve ? 'Bonding Curve' : 
+                           formatAddress(holder.address)}
                         </span>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-medium">{(holder.percentage || 0).toFixed(2)}%</p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatTokenAmount(holder.balance)}
+                        {!holder.isLiquidity && (
+                          <p className="text-sm font-medium">{(holder.percentage || 0).toFixed(2)}%</p>
+                        )}
+                        <p className={holder.isLiquidity ? "text-sm font-medium text-primary" : "text-xs text-muted-foreground"}>
+                          {formatTokenAmount(holder.balance)} {holder.isLiquidity && 'tokens'}
                         </p>
                       </div>
                     </div>

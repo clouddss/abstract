@@ -21,6 +21,7 @@ import tradesRouter from './routes/trades';
 import rewardsRouter from './routes/rewards';
 import statsRouter from './routes/stats';
 import healthRouter from './routes/health';
+import websocketRouter from './routes/websocket';
 
 const app = express();
 
@@ -155,6 +156,7 @@ app.get('/', (req, res) => {
       trades: '/api/trades',
       rewards: '/api/rewards',
       stats: '/api/stats',
+      websocket: '/api/websocket',
       health: '/health'
     },
     features: {
@@ -172,6 +174,7 @@ app.use('/api/v1/tokens', tokensRouter);
 app.use('/api/v1/trades', tradesRouter);
 app.use('/api/v1/rewards', rewardsRouter);
 app.use('/api/v1/stats', statsRouter);
+app.use('/api/v1/websocket', websocketRouter);
 
 // Legacy routes (without version) - mount directly to v1 routers
 app.use('/api/auth', authRouter);
@@ -179,6 +182,7 @@ app.use('/api/tokens', tokensRouter);
 app.use('/api/trades', tradesRouter);
 app.use('/api/rewards', rewardsRouter);
 app.use('/api/stats', statsRouter);
+app.use('/api/websocket', websocketRouter);
 
 // 404 handler
 app.use('*', (req, res) => {

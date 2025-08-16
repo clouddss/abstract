@@ -5,6 +5,7 @@ import { prisma } from '../../database/client';
 import { validateRequest } from '../middleware/validation';
 import { Interval } from '@prisma/client';
 import tokenLaunchRouter from './tokens-launch';
+import { queryCacheService } from '../services/queryCache';
 
 const router = Router();
 
@@ -98,101 +99,20 @@ router.get('/', validateRequest(getTokensSchema), async (req, res) => {
     const migrated = req.query.migrated === 'true' ? true : req.query.migrated === 'false' ? false : undefined;
     const search = req.query.search as string | undefined;
     
-    // Build where clause
-    const where: any = {};
-    
-    if (creator) {
-      where.creator = creator;
-    }
-    
-    if (migrated !== undefined) {
-      where.migrated = migrated;
-    }
-    
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { symbol: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } }
-      ];
-    }
-
-    // Build order by
-    let orderBy: any = {};
-    switch (sort) {
-      case 'volume':
-        orderBy = { volumeTotal: order };
-        break;
-      case 'marketCap':
-        orderBy = { marketCap: order };
-        break;
-      case 'holders':
-        orderBy = { holderCount: order };
-        break;
-      default:
-        orderBy = { createdAt: order };
-    }
-
-    // Calculate pagination
-    const skip = (page - 1) * limit;
-
-    // Get tokens and total count
-    const [tokens, total] = await Promise.all([
-      prisma.token.findMany({
-        where,
-        orderBy,
-        skip,
-        take: limit,
-        include: {
-          _count: {
-            select: {
-              trades: true,
-              holders: true
-            }
-          }
-        }
-      }),
-      prisma.token.count({ where })
-    ]);
-
-    // Format response
-    const formattedTokens = tokens.map(token => ({
-      address: token.address,
-      name: token.name,
-      symbol: token.symbol,
-      description: token.description,
-      imageUrl: token.imageUrl,
-      website: token.website,
-      twitter: token.twitter,
-      telegram: token.telegram,
-      creator: token.creator,
-      bondingCurve: token.bondingCurve,
-      migrated: token.migrated,
-      migratedAt: token.migratedAt,
-      dexPair: token.dexPair,
-      totalSupply: token.totalSupply,
-      soldSupply: token.soldSupply,
-      marketCap: token.marketCap,
-      volume24h: token.volume24h,
-      volume7d: token.volume7d,
-      volumeTotal: token.volumeTotal,
-      holders: token.holderCount,
-      trades: token._count.trades,
-      createdAt: token.createdAt,
-      progress: calculateProgress(token.soldSupply, token.curveSupply)
-    }));
+    // OPTIMIZED: Use cached token list query to reduce database load
+    const result = await queryCacheService.getCachedTokenList({
+      page,
+      limit,
+      sort,
+      order,
+      creator,
+      migrated,
+      search
+    });
 
     res.json({
       success: true,
-      data: {
-        tokens: formattedTokens,
-        pagination: {
-          page,
-          limit,
-          total,
-          pages: Math.ceil(total / limit)
-        }
-      }
+      data: result
     });
 
   } catch (error) {
@@ -212,28 +132,49 @@ router.get('/:address', validateRequest(getTokenSchema), async (req, res) => {
   try {
     const { address } = req.params;
 
-    const token = await prisma.token.findUnique({
-      where: { address: address.toLowerCase() },
-      include: {
-        trades: {
-          orderBy: { timestamp: 'desc' },
-          take: 10
-        },
-        holders: {
-          orderBy: { balance: 'desc' },
-          take: 50,
-          where: {
-            balance: { gt: '0' }
-          }
-        },
-        _count: {
-          select: {
-            trades: true,
-            holders: true
-          }
+    // OPTIMIZED: Use separate optimized queries instead of include to avoid N+1
+    const [token, recentTrades, topHolders, tradeCounts] = await Promise.all([
+      prisma.token.findUnique({
+        where: { address: address.toLowerCase() }
+      }),
+      // Optimized: Get recent trades with single query
+      prisma.trade.findMany({
+        where: { tokenAddress: address.toLowerCase() },
+        orderBy: { timestamp: 'desc' },
+        take: 10,
+        select: {
+          id: true,
+          type: true,
+          trader: true,
+          amountIn: true,
+          amountOut: true,
+          price: true,
+          timestamp: true,
+          txHash: true
         }
-      }
-    });
+      }),
+      // Optimized: Get top holders with single query
+      prisma.holder.findMany({
+        where: {
+          tokenAddress: address.toLowerCase(),
+          balance: { gt: '0' }
+        },
+        orderBy: { balance: 'desc' },
+        take: 50,
+        select: {
+          wallet: true,
+          balance: true,
+          firstBoughtAt: true,
+          lastActivity: true
+        }
+      }),
+      // Optimized: Get counts efficiently
+      prisma.$queryRaw<Array<{ trade_count: bigint, holder_count: bigint }>>`
+        SELECT 
+          (SELECT COUNT(*) FROM trades WHERE token_address = ${address.toLowerCase()}) as trade_count,
+          (SELECT COUNT(*) FROM holders WHERE token_address = ${address.toLowerCase()} AND balance::numeric > 0) as holder_count
+      `
+    ]);
 
     if (!token) {
       return res.status(404).json({
@@ -250,61 +191,64 @@ router.get('/:address', validateRequest(getTokenSchema), async (req, res) => {
     // Get 24h price change
     const priceChange24h = await getPriceChange24h(address);
 
-    // Add bonding curve as a holder if tokens are still in curve
+    // Calculate bonding curve balance and holder stats
     const bondingCurveBalance = BigInt(token.curveSupply) - BigInt(token.soldSupply);
     const allHolders = [];
     
-    // Calculate circulating supply (only tokens that are actually distributed)
-    // For bonding curve tokens, this is the sold supply + bonding curve balance
-    // We use curveSupply as the denominator since that's the max that can be in circulation before migration
-    const circulatingSupply = token.migrated ? token.totalSupply : token.curveSupply;
+    // For percentage calculation, we only consider what's actually in circulation
+    // This is the sold supply (tokens bought by users)
+    const circulatingSupply = BigInt(token.soldSupply);
     
-    // Add bonding curve as first holder if it has balance
+    // Add bonding curve as first holder showing remaining liquidity
     if (bondingCurveBalance > 0n && !token.migrated) {
+      // For bonding curve, show it as "Liquidity" with the remaining tokens
+      // Don't include it in percentage calculation since it's not circulating
       allHolders.push({
         address: token.bondingCurve,
         balance: bondingCurveBalance.toString(),
-        percentage: calculateHolderPercentage(bondingCurveBalance.toString(), circulatingSupply),
+        percentage: 0, // Bonding curve doesn't count towards holder percentages
         firstBought: token.createdAt,
         lastActivity: token.updatedAt,
-        isBondingCurve: true
+        isBondingCurve: true,
+        isLiquidity: true
       });
     }
     
-    // Add regular holders
-    const regularHolders = token.holders
-      .filter(h => BigInt(h.balance) > 0n)
-      .map(holder => ({
+    // Add regular holders with correct percentage of circulating supply
+    const regularHolders = topHolders.map(holder => {
+      // Calculate percentage based on circulating supply (sold tokens only)
+      const percentage = circulatingSupply > 0n 
+        ? calculateHolderPercentage(holder.balance, token.soldSupply)
+        : 0;
+      
+      return {
         address: holder.wallet,
         balance: holder.balance,
-        percentage: calculateHolderPercentage(holder.balance, circulatingSupply),
+        percentage,
         firstBought: holder.firstBoughtAt,
         lastActivity: holder.lastActivity,
-        isBondingCurve: false
-      }));
+        isBondingCurve: false,
+        isLiquidity: false
+      };
+    });
     
     allHolders.push(...regularHolders);
     
-    // Sort by balance descending and take top holders
+    // Sort holders: Bonding curve first, then by balance descending
     const topHolders = allHolders
       .sort((a, b) => {
+        // Bonding curve always comes first
+        if (a.isBondingCurve) return -1;
+        if (b.isBondingCurve) return 1;
+        
+        // Then sort by balance
         const balA = BigInt(a.balance);
         const balB = BigInt(b.balance);
         return balB > balA ? 1 : balB < balA ? -1 : 0;
       })
       .slice(0, 10);
 
-    // Format recent trades
-    const recentTrades = token.trades.map(trade => ({
-      id: trade.id,
-      type: trade.type,
-      trader: trade.trader,
-      amountIn: trade.amountIn,
-      amountOut: trade.amountOut,
-      price: trade.price,
-      timestamp: trade.timestamp,
-      txHash: trade.txHash
-    }));
+    // Format recent trades - already optimized above
 
     res.json({
       success: true,
@@ -317,9 +261,9 @@ router.get('/:address', validateRequest(getTokenSchema), async (req, res) => {
         topHolders,
         recentTrades,
         stats: {
-          totalTrades: token._count.trades,
-          totalHolders: token._count.holders,
-          actualHolders: token.holders.filter(h => BigInt(h.balance) > 0n).length
+          totalTrades: Number(tradeCounts[0]?.trade_count || 0),
+          totalHolders: Number(tradeCounts[0]?.holder_count || 0),
+          actualHolders: topHolders.length
         }
       }
     });
@@ -385,23 +329,13 @@ router.get('/:address/chart', validateRequest(getTokenChartSchema), async (req, 
       timeRange.gte = new Date(now.getTime() - minutesBack * 60 * 1000);
     }
 
-    const priceData = await prisma.priceData.findMany({
-      where: {
-        tokenAddress: address,
-        interval: dbInterval as Interval,
-        ...(Object.keys(timeRange).length > 0 && { timestamp: timeRange })
-      },
-      orderBy: { timestamp: 'asc' }
-    });
-
-    const chartData = priceData.map(point => ({
-      timestamp: point.timestamp.getTime(),
-      open: parseFloat(point.open),
-      high: parseFloat(point.high),
-      low: parseFloat(point.low),
-      close: parseFloat(point.close),
-      volume: point.volume
-    }));
+    // OPTIMIZED: Use cached price data query
+    const chartData = await queryCacheService.getCachedPriceData(
+      address,
+      dbInterval,
+      from,
+      to
+    );
 
     res.json({
       success: true,
@@ -429,29 +363,17 @@ router.get('/:address/trades', async (req, res) => {
     const { address } = req.params;
     const page = parseInt(req.query.page as string) || 1;
     const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
-    const skip = (page - 1) * limit;
 
-    const [trades, total] = await Promise.all([
-      prisma.trade.findMany({
-        where: { tokenAddress: address.toLowerCase() },
-        orderBy: { timestamp: 'desc' },
-        skip,
-        take: limit
-      }),
-      prisma.trade.count({ where: { tokenAddress: address.toLowerCase() } })
-    ]);
+    // OPTIMIZED: Use cached trade history query
+    const result = await queryCacheService.getCachedTradeHistory(
+      address.toLowerCase(),
+      page,
+      limit
+    );
 
     res.json({
       success: true,
-      data: {
-        trades,
-        pagination: {
-          page,
-          limit,
-          total,
-          pages: Math.ceil(total / limit)
-        }
-      }
+      data: result
     });
 
   } catch (error) {
@@ -467,6 +389,7 @@ router.get('/:address/trades', async (req, res) => {
 function calculateProgress(soldSupply: string, curveSupply: string): number {
   const sold = BigInt(soldSupply);
   const curve = BigInt(curveSupply);
+  // FIXED: Prevent division by zero
   if (curve === 0n) return 0;
   return Number((sold * 10000n) / curve) / 100; // Percentage
 }
@@ -474,6 +397,7 @@ function calculateProgress(soldSupply: string, curveSupply: string): number {
 function calculateHolderPercentage(balance: string, totalSupply: string): number {
   const holderBalance = BigInt(balance);
   const total = BigInt(totalSupply);
+  // FIXED: Prevent division by zero
   if (total === 0n) return 0;
   return Number((holderBalance * 10000n) / total) / 100; // Percentage
 }
@@ -516,6 +440,7 @@ async function getCurrentTokenPrice(address: string): Promise<string> {
       if (token.marketCap && token.soldSupply && BigInt(token.soldSupply) > 0n) {
         const marketCapWei = BigInt(token.marketCap);
         const soldSupply = BigInt(token.soldSupply);
+        // FIXED: Use BigInt arithmetic to prevent precision loss
         const priceWei = (marketCapWei * ethers.parseEther('1')) / soldSupply;
         return ethers.formatEther(priceWei);
       }
@@ -548,12 +473,18 @@ async function getPriceChange24h(address: string): Promise<number> {
 
     if (!currentTrade || !oldTrade) return 0;
 
-    const currentPrice = parseFloat(currentTrade.price);
-    const oldPrice = parseFloat(oldTrade.price);
+    // FIXED: Use BigInt arithmetic for precise calculation, then convert to float for percentage
+    const currentPriceBig = BigInt(currentTrade.price);
+    const oldPriceBig = BigInt(oldTrade.price);
 
-    if (oldPrice === 0) return 0;
+    // FIXED: Prevent division by zero
+    if (oldPriceBig === 0n) return 0;
 
-    return ((currentPrice - oldPrice) / oldPrice) * 100;
+    // Calculate percentage change using BigInt arithmetic for precision
+    const priceDifference = currentPriceBig - oldPriceBig;
+    const percentageChange = Number((priceDifference * 10000n) / oldPriceBig) / 100;
+    
+    return percentageChange;
   } catch {
     return 0;
   }
@@ -581,13 +512,17 @@ async function getBondingCurveProgress(token: any): Promise<number> {
         bondingCurve.maxSupply ? bondingCurve.maxSupply() : BigInt(token.curveSupply || '700000000000000000000000000')
       ]);
       
+      // FIXED: Prevent division by zero
       if (maxSupply === 0n) return 0;
+      // FIXED: Use proper BigInt arithmetic to avoid precision loss
       return Number((tokensSold * 10000n) / maxSupply) / 100;
     } catch {
       // Fallback to database values
       const sold = BigInt(token.soldSupply || '0');
       const curve = BigInt(token.curveSupply || '700000000000000000000000000');
+      // FIXED: Prevent division by zero
       if (curve === 0n) return 0;
+      // FIXED: Use proper BigInt arithmetic to avoid precision loss
       return Number((sold * 10000n) / curve) / 100;
     }
   } catch (error) {
@@ -618,12 +553,16 @@ async function getMigrationProgress(token: any): Promise<number> {
       // Get current ETH balance in bonding curve
       const ethBalance = await provider.getBalance(token.bondingCurve);
       
+      // FIXED: Prevent division by zero
       if (MIGRATION_THRESHOLD === 0n) return 100;
+      // FIXED: Use proper BigInt arithmetic to avoid precision loss
       const progress = Number((ethBalance * 10000n) / MIGRATION_THRESHOLD) / 100;
       return Math.min(progress, 100); // Cap at 100%
     } catch {
       // Fallback calculation based on volume
       const volumeTotal = BigInt(token.volumeTotal || '0');
+      // FIXED: Prevent division by zero and use proper BigInt arithmetic
+      if (MIGRATION_THRESHOLD === 0n) return 100;
       const progress = Number((volumeTotal * 10000n) / MIGRATION_THRESHOLD) / 100;
       return Math.min(progress, 100);
     }

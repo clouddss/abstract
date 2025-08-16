@@ -1,6 +1,7 @@
 import { appConfig } from './config';
 import { prisma } from './database/client';
 import app from './api';
+import { wsManager } from './websocket/server';
 
 async function startServer() {
   try {
@@ -16,7 +17,12 @@ async function startServer() {
       console.log(`📍 Environment: ${appConfig.NODE_ENV}`);
       console.log(`🔗 Health check: http://localhost:${appConfig.PORT}/health`);
       console.log(`📚 API docs: http://localhost:${appConfig.PORT}/api`);
+      console.log(`🔌 WebSocket server: ws://localhost:${appConfig.PORT}/ws`);
     });
+
+    // Initialize WebSocket server
+    wsManager.initialize(server);
+    console.log('✅ WebSocket server initialized');
 
     // Graceful shutdown
     const gracefulShutdown = async (signal: string) => {

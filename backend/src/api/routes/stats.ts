@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../../database/client';
+import { VolumeAggregationService } from '../services/volumeAggregation';
 
 const router = Router();
 
@@ -66,28 +67,17 @@ router.get('/platform', async (req, res) => {
       }).then(result => result.length)
     ]);
 
-    // Get trending tokens (most volume in timeframe)
-    const trendingTokens = await prisma.token.findMany({
-      include: {
-        trades: {
-          where: { timestamp: { gte: startTime } },
-          select: { amountIn: true }
-        }
-      },
-      take: 10
-    });
-
-    const trendingWithVolume = trendingTokens
-      .map(token => ({
-        address: token.address,
-        name: token.name,
-        symbol: token.symbol,
-        imageUrl: token.imageUrl,
-        volume: token.trades.reduce((sum, trade) => sum + BigInt(trade.amountIn), 0n).toString(),
-        progress: calculateProgress(token.soldSupply, token.curveSupply)
-      }))
-      .sort((a, b) => Number(BigInt(b.volume) - BigInt(a.volume)))
-      .slice(0, 5);
+    // OPTIMIZED: Get trending tokens using materialized view (eliminates N+1 query)
+    const trendingTokensOptimized = await VolumeAggregationService.getTrendingTokensOptimized(5);
+    
+    const trendingWithVolume = trendingTokensOptimized.map(token => ({
+      address: token.address,
+      name: token.name,
+      symbol: token.symbol,
+      imageUrl: token.image_url,
+      volume: token.volume_24h.toString(),
+      progress: token.progress_percent
+    }));
 
     // Get recent launches
     const recentLaunches = await prisma.token.findMany({
@@ -263,23 +253,8 @@ router.get('/leaderboards', async (req, res) => {
       };
     });
 
-    // Top holders by value
-    const topHolders = await prisma.$queryRaw<Array<{
-      wallet: string;
-      totalValue: string;
-      tokenCount: number;
-    }>>`
-      SELECT 
-        h.wallet,
-        SUM(CAST(h.balance AS NUMERIC) * CAST(t.market_cap AS NUMERIC) / CAST(t.sold_supply AS NUMERIC)) as total_value,
-        COUNT(DISTINCT h.token_address) as token_count
-      FROM holders h
-      JOIN tokens t ON h.token_address = t.address
-      WHERE CAST(h.balance AS NUMERIC) > 0
-      GROUP BY h.wallet
-      ORDER BY total_value DESC
-      LIMIT ${limit}
-    `;
+    // OPTIMIZED: Top holders using materialized view
+    const topHolders = await VolumeAggregationService.getHolderLeaderboard(limit);
 
     // Format leaderboards
     const formattedTraders = topTraders.map((trader, index) => ({
@@ -298,8 +273,8 @@ router.get('/leaderboards', async (req, res) => {
     const formattedHolders = topHolders.map((holder, index) => ({
       rank: index + 1,
       address: holder.wallet,
-      totalValue: holder.totalValue,
-      tokenCount: holder.tokenCount
+      totalValue: holder.total_portfolio_value.toString(),
+      tokenCount: holder.token_count
     }));
 
     res.json({

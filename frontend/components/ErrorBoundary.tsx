@@ -32,14 +32,44 @@ export class ErrorBoundary extends Component<Props, State> {
       console.error('ErrorBoundary caught an error:', error, errorInfo);
     }
 
+    // Enhanced error logging with more context
+    const errorReport = {
+      error: {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      },
+      errorInfo: {
+        componentStack: errorInfo.componentStack,
+      },
+      context: {
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+        url: window.location.href,
+        userId: localStorage.getItem('userId') || 'anonymous',
+      },
+    };
+
     // Log to error reporting service in production
     if (process.env.NODE_ENV === 'production') {
       // TODO: Send to Sentry or similar service
-      console.error('Production error:', {
-        error: error.toString(),
-        componentStack: errorInfo.componentStack,
-        timestamp: new Date().toISOString(),
-      });
+      // For now, send to console with structured data
+      console.error('Production error report:', errorReport);
+      
+      // Could also send to an API endpoint for tracking
+      try {
+        fetch('/api/errors', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(errorReport),
+        }).catch(() => {
+          // Ignore fetch errors to prevent infinite loops
+        });
+      } catch {
+        // Ignore any errors in error reporting
+      }
+    } else {
+      console.error('Development error report:', errorReport);
     }
 
     this.setState({
@@ -133,10 +163,40 @@ export function useErrorBoundary() {
     }
   }, [error]);
 
+  // Enhanced error throwing with better error context
+  const throwError = React.useCallback((error: Error | string) => {
+    const errorObj = typeof error === 'string' ? new Error(error) : error;
+    
+    // Add context to error
+    if (errorObj.stack) {
+      errorObj.stack += `\n    at useErrorBoundary (${window.location.href})`;
+    }
+    
+    setError(errorObj);
+  }, []);
+
+  const resetError = React.useCallback(() => {
+    setError(null);
+  }, []);
+
   return {
-    throwError: (error: Error) => setError(error),
-    resetError: () => setError(null),
+    throwError,
+    resetError,
+    hasError: !!error,
   };
+}
+
+// Async error boundary hook for handling promise rejections
+export function useAsyncErrorBoundary() {
+  const { throwError } = useErrorBoundary();
+
+  return React.useCallback(
+    (error: Error) => {
+      // Handle async errors by throwing them in the next tick
+      setTimeout(() => throwError(error), 0);
+    },
+    [throwError]
+  );
 }
 
 // Wrapper component for common error scenarios
@@ -167,4 +227,81 @@ export function ErrorFallback({
       )}
     </div>
   );
+}
+
+// Specialized error boundaries for different application areas
+export function TradingErrorBoundary({ children }: { children: React.ReactNode }) {
+  return (
+    <ErrorBoundary 
+      fallback={
+        <ErrorFallback 
+          message="Trading interface error"
+          error={undefined}
+          resetError={() => window.location.reload()}
+        />
+      }
+    >
+      {children}
+    </ErrorBoundary>
+  );
+}
+
+export function ChartErrorBoundary({ children }: { children: React.ReactNode }) {
+  return (
+    <ErrorBoundary 
+      fallback={
+        <div className="h-64 flex items-center justify-center border border-gray-700 rounded-lg">
+          <div className="text-center">
+            <AlertTriangle className="w-8 h-8 text-yellow-500 mx-auto mb-2" />
+            <p className="text-sm text-gray-400">Chart failed to load</p>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="mt-2 text-xs text-blue-400 hover:text-blue-300"
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
+      }
+    >
+      {children}
+    </ErrorBoundary>
+  );
+}
+
+export function WalletErrorBoundary({ children }: { children: React.ReactNode }) {
+  return (
+    <ErrorBoundary 
+      fallback={
+        <ErrorFallback 
+          message="Wallet connection error"
+          error={undefined}
+          resetError={() => {
+            // Clear wallet connection data
+            localStorage.removeItem('walletconnect');
+            localStorage.removeItem('wagmi.wallet');
+            window.location.reload();
+          }}
+        />
+      }
+    >
+      {children}
+    </ErrorBoundary>
+  );
+}
+
+// Higher-order component for wrapping components with error boundaries
+export function withErrorBoundary<P extends object>(
+  Component: React.ComponentType<P>,
+  fallback?: React.ReactNode
+) {
+  const WrappedComponent = (props: P) => (
+    <ErrorBoundary fallback={fallback}>
+      <Component {...props} />
+    </ErrorBoundary>
+  );
+
+  WrappedComponent.displayName = `withErrorBoundary(${Component.displayName || Component.name})`;
+  
+  return WrappedComponent;
 }

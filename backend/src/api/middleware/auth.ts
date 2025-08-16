@@ -2,6 +2,28 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { appConfig } from '../../config';
 
+// Validate JWT secret at startup
+function validateJWTSecret(secret: string | undefined): string {
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is required');
+  }
+  
+  if (secret.length < 32) {
+    throw new Error('JWT_SECRET must be at least 32 characters long for security');
+  }
+  
+  // Check for common weak secrets
+  const weakSecrets = ['secret', 'password', 'jwt-secret', '123456', 'your-secret-key'];
+  if (weakSecrets.includes(secret.toLowerCase())) {
+    throw new Error('JWT_SECRET appears to be a weak/default value. Use a strong, unique secret.');
+  }
+  
+  return secret;
+}
+
+// Validate secret once at module load
+const JWT_SECRET = validateJWTSecret(appConfig.JWT_SECRET);
+
 // Extend Express Request type
 declare global {
   namespace Express {
@@ -27,13 +49,32 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
     
     const token = authHeader.split(' ')[1];
     
-    // Verify token
-    const decoded = jwt.verify(token, appConfig.JWT_SECRET) as any;
+    // Additional token validation
+    if (!token || token.trim() === '') {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid token format'
+      });
+    }
+    
+    // Verify token with validated secret
+    const decoded = jwt.verify(token, JWT_SECRET, {
+      algorithms: ['HS256'], // Explicitly specify allowed algorithms
+      maxAge: appConfig.JWT_EXPIRATION
+    }) as any;
+    
+    // Validate decoded payload
+    if (!decoded.userId || !decoded.address) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid token payload'
+      });
+    }
     
     // Add user info to request
     req.user = {
       userId: decoded.userId,
-      address: decoded.address
+      address: decoded.address.toLowerCase() // Normalize address
     };
     
     next();
@@ -52,6 +93,14 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
       });
     }
     
+    if (error instanceof jwt.NotBeforeError) {
+      return res.status(401).json({
+        success: false,
+        error: 'Token not yet valid'
+      });
+    }
+    
+    console.error('Authentication error:', error);
     return res.status(500).json({
       success: false,
       error: 'Authentication error'
@@ -68,12 +117,22 @@ export function optionalAuthMiddleware(req: Request, res: Response, next: NextFu
     }
     
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, appConfig.JWT_SECRET) as any;
+    if (!token || token.trim() === '') {
+      return next();
+    }
     
-    req.user = {
-      userId: decoded.userId,
-      address: decoded.address
-    };
+    const decoded = jwt.verify(token, JWT_SECRET, {
+      algorithms: ['HS256'],
+      maxAge: appConfig.JWT_EXPIRATION
+    }) as any;
+    
+    // Validate decoded payload
+    if (decoded.userId && decoded.address) {
+      req.user = {
+        userId: decoded.userId,
+        address: decoded.address.toLowerCase()
+      };
+    }
   } catch {
     // Ignore errors, user just won't be authenticated
   }

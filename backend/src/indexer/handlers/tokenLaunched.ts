@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import { prisma } from '../../database/client';
 import { getBlockTimestamp } from '../ethereum';
+import { wsEvents } from '../../websocket/events';
 
 export interface TokenLaunchedEvent {
   tokenAddress: string;
@@ -68,8 +69,18 @@ export async function handleTokenLaunched(event: TokenLaunchedEvent): Promise<vo
 
     console.log(`✅ Token ${token.symbol} created successfully`);
 
-    // Emit real-time update (if WebSocket is connected)
-    // await emitTokenUpdate(token);
+    // Emit WebSocket event for new token
+    wsEvents.emitNewToken({
+      address: token.address,
+      name: token.name,
+      symbol: token.symbol,
+      description: token.description || undefined,
+      creator: token.creator,
+      fundingGoal: "30000000000000000000", // 30 ETH default funding goal
+      initialPrice: "1000000000000000", // 0.001 ETH initial price
+      totalSupply: token.totalSupply,
+      timestamp
+    });
 
   } catch (error) {
     console.error('❌ Error handling TokenLaunched event:', error);

@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ConnectWallet } from '@/components/ConnectWallet'
+import { WalletErrorBoundary } from '@/components/ErrorBoundary'
 import { 
   Rocket, 
   Menu, 
@@ -77,7 +78,9 @@ export function Navigation() {
 
           {/* Desktop Actions */}
           <div className="hidden md:flex items-center space-x-4">
-            <ConnectWallet />
+            <WalletErrorBoundary>
+              <ConnectWallet />
+            </WalletErrorBoundary>
           </div>
 
           {/* Mobile Menu Button */}
@@ -117,7 +120,9 @@ export function Navigation() {
               </Link>
             ))}
             <div className="pt-4 border-t border-gray-200">
-              <ConnectWallet />
+              <WalletErrorBoundary>
+                <ConnectWallet />
+              </WalletErrorBoundary>
             </div>
           </div>
         </div>
