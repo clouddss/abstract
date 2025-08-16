@@ -169,12 +169,12 @@ app.use('/api/v1/trades', tradesRouter);
 app.use('/api/v1/rewards', rewardsRouter);
 app.use('/api/v1/stats', statsRouter);
 
-// Legacy routes (without version) - redirect to v1
-app.use('/api/auth', (req, res) => res.redirect(301, `/api/v1/auth${req.url}`));
-app.use('/api/tokens', (req, res) => res.redirect(301, `/api/v1/tokens${req.url}`));
-app.use('/api/trades', (req, res) => res.redirect(301, `/api/v1/trades${req.url}`));
-app.use('/api/rewards', (req, res) => res.redirect(301, `/api/v1/rewards${req.url}`));
-app.use('/api/stats', (req, res) => res.redirect(301, `/api/v1/stats${req.url}`));
+// Legacy routes (without version) - mount directly to v1 routers
+app.use('/api/auth', authRouter);
+app.use('/api/tokens', tokensRouter);
+app.use('/api/trades', tradesRouter);
+app.use('/api/rewards', rewardsRouter);
+app.use('/api/stats', statsRouter);
 
 // 404 handler
 app.use('*', (req, res) => {
