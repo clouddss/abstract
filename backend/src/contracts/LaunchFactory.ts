@@ -8,26 +8,58 @@ export const CONTRACT_ADDRESSES = {
   REWARDS_VAULT: '0x946241f84fcc8A8851dF4D0823910471B2A5bD77'
 };
 
-// LaunchFactory ABI - only the functions we need
+// LaunchFactory ABI - for the proper contract
 export const LAUNCH_FACTORY_ABI = [
   {
     "inputs": [
       {
-        "internalType": "string",
-        "name": "_name",
-        "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "_symbol",
-        "type": "string"
+        "components": [
+          {
+            "internalType": "string",
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "symbol",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "description",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "imageUrl",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "website",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "twitter",
+            "type": "string"
+          },
+          {
+            "internalType": "string",
+            "name": "telegram",
+            "type": "string"
+          }
+        ],
+        "internalType": "struct ILaunchFactory.TokenMetadata",
+        "name": "metadata",
+        "type": "tuple"
       }
     ],
-    "name": "deployToken",
+    "name": "launchToken",
     "outputs": [
       {
         "internalType": "address",
-        "name": "token",
+        "name": "tokenAddress",
         "type": "address"
       },
       {
@@ -214,9 +246,18 @@ export async function estimateGasForDeploy(name: string, symbol: string): Promis
   return 300000n;
 }
 
-export function encodeDeployTokenData(name: string, symbol: string): string {
+export function encodeDeployTokenData(name: string, symbol: string, description?: string, imageUrl?: string, website?: string, twitter?: string, telegram?: string): string {
   const iface = new ethers.Interface(LAUNCH_FACTORY_ABI);
-  return iface.encodeFunctionData('deployToken', [name, symbol]);
+  const metadata = {
+    name,
+    symbol,
+    description: description || '',
+    imageUrl: imageUrl || '',
+    website: website || '',
+    twitter: twitter || '',
+    telegram: telegram || ''
+  };
+  return iface.encodeFunctionData('launchToken', [metadata]);
 }
 
 export function decodeTokenLaunchedEvent(receipt: ethers.TransactionReceipt): {

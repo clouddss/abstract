@@ -46,14 +46,14 @@ const confirmLaunchSchema = z.object({
  */
 router.post('/launch', authMiddleware, validateRequest(launchTokenSchema), async (req: Request, res: Response) => {
   try {
-    const { name, symbol } = req.body;
+    const { name, symbol, description, imageUrl, website, twitter, telegram } = req.body;
     const userAddress = req.user!.address;
 
     // Get launch fee from contract
     const launchFee = await getLaunchFee();
     
-    // Encode the transaction data
-    const data = encodeDeployTokenData(name, symbol);
+    // Encode the transaction data with all metadata
+    const data = encodeDeployTokenData(name, symbol, description, imageUrl, website, twitter, telegram);
 
     // Return transaction details for user to sign
     res.json({
