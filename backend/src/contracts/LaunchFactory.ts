@@ -77,7 +77,7 @@ export const LAUNCH_FACTORY_ABI = [
       {
         "indexed": true,
         "internalType": "address",
-        "name": "token",
+        "name": "tokenAddress",
         "type": "address"
       },
       {
@@ -93,16 +93,19 @@ export const LAUNCH_FACTORY_ABI = [
         "type": "address"
       },
       {
+        "components": [
+          { "internalType": "string", "name": "name", "type": "string" },
+          { "internalType": "string", "name": "symbol", "type": "string" },
+          { "internalType": "string", "name": "description", "type": "string" },
+          { "internalType": "string", "name": "imageUrl", "type": "string" },
+          { "internalType": "string", "name": "website", "type": "string" },
+          { "internalType": "string", "name": "twitter", "type": "string" },
+          { "internalType": "string", "name": "telegram", "type": "string" }
+        ],
         "indexed": false,
-        "internalType": "string",
-        "name": "name",
-        "type": "string"
-      },
-      {
-        "indexed": false,
-        "internalType": "string",
-        "name": "symbol",
-        "type": "string"
+        "internalType": "struct ILaunchFactory.TokenMetadata",
+        "name": "metadata",
+        "type": "tuple"
       }
     ],
     "name": "TokenLaunched",
@@ -300,12 +303,13 @@ export function decodeTokenLaunchedEvent(receipt: ethers.TransactionReceipt): {
       });
       
       if (parsed && parsed.name === 'TokenLaunched') {
+        const metadata = parsed.args[3];
         return {
           token: parsed.args[0],
           creator: parsed.args[1],
           bondingCurve: parsed.args[2],
-          name: parsed.args[3],
-          symbol: parsed.args[4]
+          name: metadata.name,
+          symbol: metadata.symbol
         };
       }
     } catch (e) {
