@@ -5,6 +5,7 @@ import { prisma } from '../../database/client';
 import { validateRequest } from '../middleware/validation';
 import { authMiddleware } from '../middleware/auth';
 import { getProvider, BONDING_CURVE_ABI } from '../../contracts/LaunchFactory';
+import { TradeType } from '@prisma/client';
 
 const router = Router();
 
@@ -218,6 +219,72 @@ router.get('/price/:tokenAddress', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       error: 'Failed to fetch price'
+    });
+  }
+});
+
+/**
+ * POST /api/trades/execute
+ * Execute a trade (returns transaction data for wallet to sign)
+ */
+router.post('/execute', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { tokenAddress, type, amountIn, minAmountOut } = req.body;
+    
+    // Get token info
+    const token = await prisma.token.findUnique({
+      where: { address: tokenAddress.toLowerCase() }
+    });
+
+    if (!token) {
+      return res.status(404).json({
+        success: false,
+        error: 'Token not found'
+      });
+    }
+
+    const bondingCurveAddress = token.bondingCurve;
+    const iface = new ethers.Interface(BONDING_CURVE_ABI);
+    
+    let to: string;
+    let data: string;
+    let value: string;
+
+    if (type === TradeType.BUY || type === 'BUY') {
+      // Prepare buy transaction (amountIn is in wei)
+      const minTokensOut = BigInt(minAmountOut);
+      
+      to = bondingCurveAddress;
+      data = iface.encodeFunctionData('buyTokens', [minTokensOut]);
+      value = amountIn; // Already in wei
+      
+    } else {
+      // Prepare sell transaction
+      const tokenAmount = BigInt(amountIn);
+      const minEthOut = BigInt(minAmountOut);
+      
+      to = bondingCurveAddress;
+      data = iface.encodeFunctionData('sellTokens', [tokenAmount, minEthOut]);
+      value = '0';
+    }
+
+    res.json({
+      success: true,
+      txHash: '', // Will be filled by frontend after signing
+      status: 'pending',
+      message: 'Please sign the transaction in your wallet',
+      transactionData: {
+        to,
+        data,
+        value
+      }
+    });
+
+  } catch (error) {
+    console.error('Error preparing trade execution:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to prepare trade'
     });
   }
 });
