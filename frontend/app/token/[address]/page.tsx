@@ -251,7 +251,7 @@ export default function TokenPage() {
               <span>Bonding Curve</span>
             </div>
             <span className="text-xl font-bold text-primary">
-              {isLoading ? <Skeleton className="h-6 w-16" /> : `${token?.progress.toFixed(1)}%`}
+              {isLoading ? <Skeleton className="h-6 w-16" /> : `${(token?.bondingCurveProgress || token?.progress || 0).toFixed(1)}%`}
             </span>
           </div>
 
@@ -261,7 +261,7 @@ export default function TokenPage() {
               <span>Migration</span>
             </div>
             <span className="text-sm font-bold text-yellow-400">
-              {isLoading ? <Skeleton className="h-5 w-20" /> : token?.migrated ? 'Migrated' : `${(100 - (token?.progress || 0)).toFixed(1)}% left`}
+              {isLoading ? <Skeleton className="h-5 w-20" /> : token?.migrated ? 'Migrated' : `${(token?.migrationProgress || 0).toFixed(1)}% to migration`}
             </span>
           </div>
         </div>
@@ -325,7 +325,7 @@ export default function TokenPage() {
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Progress to DEX Migration</span>
                   <span className="font-semibold">
-                    {isLoading ? <Skeleton className="h-4 w-12" /> : `${token?.progress.toFixed(1)}%`}
+                    {isLoading ? <Skeleton className="h-4 w-12" /> : `${(token?.bondingCurveProgress || token?.progress || 0).toFixed(1)}%`}
                   </span>
                 </div>
                 <div className="w-full bg-secondary rounded-full h-3 overflow-hidden">
@@ -396,7 +396,7 @@ export default function TokenPage() {
                         </span>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-medium">{holder.percentage.toFixed(2)}%</p>
+                        <p className="text-sm font-medium">{(holder.percentage || 0).toFixed(2)}%</p>
                         <p className="text-xs text-muted-foreground">
                           {formatNumber(holder.balance)}
                         </p>
