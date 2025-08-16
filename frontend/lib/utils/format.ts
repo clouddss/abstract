@@ -156,11 +156,15 @@ export function formatSupply(value: string | bigint, decimals: number = 18): str
 }
 
 // Calculate and format price from market cap and supply
-export function calculatePrice(marketCap: string, totalSupply: string): string {
+export function calculatePrice(marketCap: string | undefined, totalSupply: string | undefined): string {
   try {
+    if (!marketCap || !totalSupply) {
+      return '0.000000'
+    }
+    
     // Convert market cap from wei to ETH
-    const mcapInEth = parseFloat(formatEther(BigInt(marketCap)))
-    const supplyInTokens = parseFloat(formatEther(BigInt(totalSupply)))
+    const mcapInEth = parseFloat(formatEther(BigInt(marketCap || '0')))
+    const supplyInTokens = parseFloat(formatEther(BigInt(totalSupply || '0')))
     
     if (supplyInTokens === 0) return '0.000000'
     
