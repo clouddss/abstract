@@ -343,16 +343,21 @@ router.post('/confirm', authMiddleware, async (req: Request, res: Response) => {
       });
 
       // Record trade in database
+      const isEthBuy = tradeType === 'buy';
       await prisma.trade.create({
         data: {
           tokenAddress: tokenAddress.toLowerCase(),
           trader: req.user!.address.toLowerCase(),
+          userId: req.user!.userId,
           type: tradeType,
-          ethAmount: ethers.parseEther(tradeData.ethAmount).toString(),
-          tokenAmount: ethers.parseEther(tradeData.tokenAmount).toString(),
+          amountIn: isEthBuy ? ethers.parseEther(tradeData.ethAmount).toString() : ethers.parseEther(tradeData.tokenAmount).toString(),
+          amountOut: isEthBuy ? ethers.parseEther(tradeData.tokenAmount).toString() : ethers.parseEther(tradeData.ethAmount).toString(),
           price: ethers.parseEther(tradeData.newPrice).toString(),
+          feeAmount: '0', // Calculate fee if needed
           txHash,
           blockNumber: receipt.blockNumber,
+          blockHash: receipt.blockHash,
+          logIndex: 0,
           timestamp: new Date()
         }
       });
