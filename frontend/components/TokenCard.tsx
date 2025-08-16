@@ -13,7 +13,7 @@ import {
   AlertCircle
 } from 'lucide-react'
 import { TokenListItem } from '@/lib/api/types/token.types'
-import { formatETH, formatAddress, formatNumber, calculatePrice, getPriceChangeColor } from '@/lib/utils/format'
+import { formatETH, formatAddress, formatNumber, calculatePrice, formatPrice, getPriceChangeColor } from '@/lib/utils/format'
 import { Skeleton } from './ui/skeleton'
 
 interface TokenCardProps {
@@ -91,7 +91,9 @@ export function TokenCard({ token, isLoading = false }: TokenCardProps) {
               </h3>
               <p className="text-sm text-gray-600 font-medium">${token.symbol}</p>
               <div className="flex items-center space-x-2 mt-1">
-                <span className="text-sm font-semibold text-primary">${currentPrice}</span>
+                <span className={`font-semibold text-primary ${
+                  currentPrice.length > 12 ? 'text-xs' : 'text-sm'
+                }`}>${formatPrice(currentPrice)}</span>
                 <span className={`text-xs font-medium flex items-center ${getPriceChangeColor(priceChange24h)}`}>
                   {priceChange24h >= 0 ? (
                     <ArrowUpRight className="w-3 h-3 mr-1" />

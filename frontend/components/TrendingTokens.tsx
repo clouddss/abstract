@@ -4,7 +4,7 @@ import React from 'react'
 import Link from 'next/link'
 import { TrendingUp, AlertCircle } from 'lucide-react'
 import { useTrendingTokens } from '@/hooks/useTokens'
-import { formatETH, formatNumber, calculatePrice } from '@/lib/utils/format'
+import { formatETH, formatNumber, calculatePrice, formatPrice } from '@/lib/utils/format'
 import { Skeleton } from './ui/skeleton'
 
 export function TrendingTokens() {
@@ -84,7 +84,9 @@ export function TrendingTokens() {
               </div>
             </div>
             <div className="text-right">
-              <p className="text-sm font-medium text-primary">${calculatePrice(token.marketCap, token.totalSupply)}</p>
+              <p className={`font-medium text-primary ${
+                calculatePrice(token.marketCap, token.totalSupply).length > 10 ? 'text-xs' : 'text-sm'
+              }`}>${formatPrice(calculatePrice(token.marketCap, token.totalSupply))}</p>
               <p className="text-xs text-gray-500">{formatETH(token.volume24h)} ETH</p>
             </div>
           </Link>

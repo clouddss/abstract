@@ -250,14 +250,44 @@ router.get('/:address', validateRequest(getTokenSchema), async (req, res) => {
     // Get 24h price change
     const priceChange24h = await getPriceChange24h(address);
 
-    // Format holders
-    const topHolders = token.holders.map(holder => ({
-      address: holder.wallet,
-      balance: holder.balance,
-      percentage: calculateHolderPercentage(holder.balance, token.soldSupply),
-      firstBought: holder.firstBoughtAt,
-      lastActivity: holder.lastActivity
-    }));
+    // Add bonding curve as a holder if tokens are still in curve
+    const bondingCurveBalance = BigInt(token.curveSupply) - BigInt(token.soldSupply);
+    const allHolders = [];
+    
+    // Add bonding curve as first holder if it has balance
+    if (bondingCurveBalance > 0n && !token.migrated) {
+      allHolders.push({
+        address: token.bondingCurve,
+        balance: bondingCurveBalance.toString(),
+        percentage: calculateHolderPercentage(bondingCurveBalance.toString(), token.totalSupply),
+        firstBought: token.createdAt,
+        lastActivity: token.updatedAt,
+        isBondingCurve: true
+      });
+    }
+    
+    // Add regular holders
+    const regularHolders = token.holders
+      .filter(h => BigInt(h.balance) > 0n)
+      .map(holder => ({
+        address: holder.wallet,
+        balance: holder.balance,
+        percentage: calculateHolderPercentage(holder.balance, token.totalSupply),
+        firstBought: holder.firstBoughtAt,
+        lastActivity: holder.lastActivity,
+        isBondingCurve: false
+      }));
+    
+    allHolders.push(...regularHolders);
+    
+    // Sort by balance descending and take top holders
+    const topHolders = allHolders
+      .sort((a, b) => {
+        const balA = BigInt(a.balance);
+        const balB = BigInt(b.balance);
+        return balB > balA ? 1 : balB < balA ? -1 : 0;
+      })
+      .slice(0, 10);
 
     // Format recent trades
     const recentTrades = token.trades.map(trade => ({

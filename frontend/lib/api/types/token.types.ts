@@ -65,6 +65,7 @@ export interface TokenHolder {
   percentage: number;
   firstBought: string;
   lastActivity: string;
+  isBondingCurve?: boolean;
 }
 
 export interface TokenTrade {

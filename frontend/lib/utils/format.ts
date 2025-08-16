@@ -36,23 +36,87 @@ export function formatWei(value: string | bigint, decimals: number = 4): string 
   }
 }
 
+// Format fee values (handles very small amounts better)
+export function formatFee(value: string | bigint): string {
+  try {
+    const eth = formatEther(BigInt(value))
+    const num = parseFloat(eth)
+    
+    if (num === 0) {
+      return '0'
+    }
+    
+    // For very small fees (less than 0.0001 ETH)
+    if (num < 0.0001) {
+      // Convert to more readable format
+      if (num < 0.00001) {
+        return `<0.00001`
+      }
+      return num.toFixed(5)
+    }
+    
+    // For small fees (less than 0.01 ETH)
+    if (num < 0.01) {
+      return num.toFixed(4)
+    }
+    
+    // For normal fees
+    if (num < 1) {
+      return num.toFixed(3)
+    }
+    
+    // For large fees
+    return num.toFixed(2)
+  } catch {
+    return '0'
+  }
+}
+
 // Format token amounts (already in readable units)
 export function formatTokenAmount(value: string | bigint, decimals: number = 4): string {
   try {
     // If value is in wei format (large number), convert it
     if (typeof value === 'string' && value.length > 15) {
-      return formatWei(value, decimals)
+      const eth = formatEther(BigInt(value))
+      const num = parseFloat(eth)
+      
+      // Remove unnecessary decimals for whole numbers
+      if (num >= 1 && num % 1 === 0) {
+        return formatNumber(num, 0)
+      }
+      
+      // For large numbers, use compact notation
+      if (num > 1000000) {
+        return formatNumber(num, 2)
+      }
+      
+      // For numbers with decimals
+      if (num >= 1) {
+        return num.toFixed(Math.min(decimals, 2))
+      }
+      
+      return num.toFixed(decimals)
     }
     
     const num = typeof value === 'string' ? parseFloat(value) : Number(value)
+    
+    // Remove unnecessary decimals for whole numbers
+    if (num >= 1 && num % 1 === 0) {
+      return formatNumber(num, 0)
+    }
     
     if (num > 1000000) {
       return formatNumber(num, 2)
     }
     
+    // For numbers with decimals
+    if (num >= 1) {
+      return num.toFixed(Math.min(decimals, 2))
+    }
+    
     return num.toFixed(decimals)
   } catch {
-    return '0.0000'
+    return '0'
   }
 }
 
@@ -61,6 +125,17 @@ export function formatUSD(value: string | number, decimals: number = 2): string 
   try {
     const num = typeof value === 'string' ? parseFloat(value) : value
     if (isNaN(num)) return '$0.00'
+    
+    // For large numbers, use compact format
+    if (num > 1000000000) {
+      return `$${(num / 1000000000).toFixed(2)}B`
+    }
+    if (num > 1000000) {
+      return `$${(num / 1000000).toFixed(2)}M`
+    }
+    if (num > 1000) {
+      return `$${(num / 1000).toFixed(2)}K`
+    }
     
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -73,6 +148,22 @@ export function formatUSD(value: string | number, decimals: number = 2): string 
   }
 }
 
+// Calculate USD value from ETH amount (assuming ETH price)
+export function calculateUSDValue(ethAmount: string | bigint, ethPrice: number = 2000): string {
+  try {
+    const eth = typeof ethAmount === 'string' && ethAmount.length > 15 
+      ? formatEther(BigInt(ethAmount))
+      : ethAmount.toString()
+    
+    const ethValue = parseFloat(eth)
+    const usdValue = ethValue * ethPrice
+    
+    return formatUSD(usdValue)
+  } catch {
+    return '$0.00'
+  }
+}
+
 // Format large numbers with K, M, B suffixes
 export function formatNumber(value: string | number, decimals: number = 2): string {
   try {
@@ -80,13 +171,20 @@ export function formatNumber(value: string | number, decimals: number = 2): stri
     if (isNaN(num)) return '0'
     
     if (num < 1000) {
+      // If decimals is 0 and number is whole, show without decimals
+      if (decimals === 0 || num % 1 === 0) {
+        return Math.round(num).toString()
+      }
       return num.toFixed(decimals)
     } else if (num < 1000000) {
-      return `${(num / 1000).toFixed(decimals)}K`
+      const val = num / 1000
+      return `${decimals === 0 ? Math.round(val) : val.toFixed(decimals)}K`
     } else if (num < 1000000000) {
-      return `${(num / 1000000).toFixed(decimals)}M`
+      const val = num / 1000000
+      return `${decimals === 0 ? Math.round(val) : val.toFixed(decimals)}M`
     } else {
-      return `${(num / 1000000000).toFixed(decimals)}B`
+      const val = num / 1000000000
+      return `${decimals === 0 ? Math.round(val) : val.toFixed(decimals)}B`
     }
   } catch {
     return '0'
@@ -170,20 +268,60 @@ export function calculatePrice(marketCap: string | undefined, totalSupply: strin
     
     const price = mcapInEth / supplyInTokens
     
-    if (price === 0) {
-      return '0.000000'
-    } else if (price < 0.000001) {
-      return price.toExponential(2)
-    } else if (price < 0.01) {
-      return price.toFixed(6)
-    } else if (price < 1) {
-      return price.toFixed(4)
-    } else {
-      return price.toFixed(2)
-    }
+    return formatPrice(price)
   } catch (error) {
     console.error('Error calculating price:', error)
     return '0.000000'
+  }
+}
+
+// Format price values with proper notation
+export function formatPrice(price: number | string): string {
+  try {
+    const num = typeof price === 'string' ? parseFloat(price) : price
+    
+    if (num === 0) {
+      return '0.00'
+    }
+    
+    // For extremely small prices (less than 0.00000001)
+    if (num < 0.00000001) {
+      // Count zeros after decimal
+      const zeros = -Math.floor(Math.log10(num)) - 1
+      if (zeros > 10) {
+        // For very tiny numbers, show compact notation
+        const significand = (num * Math.pow(10, zeros + 1)).toFixed(2)
+        return `${significand}e-${zeros + 1}`
+      }
+      return `0.0{${zeros}}${(num * Math.pow(10, zeros + 1)).toFixed(2)}`
+    }
+    
+    // For very small prices (less than 0.000001)
+    if (num < 0.000001) {
+      // Count zeros and show in readable format
+      const str = num.toFixed(12).replace(/0+$/, '')
+      return str
+    }
+    
+    // For small prices (less than 0.01)
+    if (num < 0.01) {
+      return num.toFixed(6).replace(/0+$/, '').replace(/\.$/, '')
+    }
+    
+    // For medium prices (less than 1)
+    if (num < 1) {
+      return num.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')
+    }
+    
+    // For normal prices (less than 1000)
+    if (num < 1000) {
+      return num.toFixed(2)
+    }
+    
+    // For large prices
+    return formatNumber(num, 2)
+  } catch {
+    return '0.00'
   }
 }
 

@@ -27,7 +27,7 @@ import {
 } from 'lucide-react'
 import { useToken } from '@/hooks/useTokens'
 import { useTokenChart } from '@/hooks/useChart'
-import { formatETH, formatWei, formatAddress, formatNumber, formatTimestamp, calculatePrice, getPriceChangeColor } from '@/lib/utils/format'
+import { formatETH, formatWei, formatAddress, formatNumber, formatTokenAmount, formatTimestamp, calculatePrice, formatPrice, getPriceChangeColor } from '@/lib/utils/format'
 import { copyToClipboard, formatError } from '@/lib/utils/ui'
 import { toast } from 'sonner'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -200,17 +200,21 @@ export default function TokenPage() {
               <DollarSign className="h-4 w-4" />
               <span>Price</span>
             </div>
-            <div className="flex items-center space-x-2">
-              <span className="text-xl font-bold">
-                {isLoading ? <Skeleton className="h-6 w-20" /> : `$${currentPrice}`}
+            <div className="flex flex-col">
+              <span className={`font-bold ${
+                currentPrice.length > 12 ? 'text-sm' : 
+                currentPrice.length > 8 ? 'text-base' : 
+                'text-xl'
+              }`}>
+                {isLoading ? <Skeleton className="h-6 w-20" /> : `$${formatPrice(currentPrice)}`}
               </span>
-              <span className={`text-sm font-medium flex items-center ${getPriceChangeColor(token?.priceChange24h || 0)}`}>
+              <span className={`text-xs font-medium flex items-center mt-1 ${getPriceChangeColor(token?.priceChange24h || 0)}`}>
                 {token?.priceChange24h && token.priceChange24h >= 0 ? (
-                  <ArrowUpRight className="h-3 w-3 mr-1" />
+                  <ArrowUpRight className="h-3 w-3 mr-0.5" />
                 ) : (
-                  <ArrowDownRight className="h-3 w-3 mr-1" />
+                  <ArrowDownRight className="h-3 w-3 mr-0.5" />
                 )}
-                {isLoading ? <Skeleton className="h-4 w-12" /> : `${Math.abs(token?.priceChange24h || 0).toFixed(2)}%`}
+                {isLoading ? <Skeleton className="h-3 w-10" /> : `${Math.abs(token?.priceChange24h || 0).toFixed(2)}%`}
               </span>
             </div>
           </div>
@@ -392,13 +396,13 @@ export default function TokenPage() {
                       <div className="flex items-center space-x-3">
                         <span className="text-sm font-medium">#{index + 1}</span>
                         <span className="text-sm font-mono text-muted-foreground">
-                          {formatAddress(holder.address)}
+                          {holder.isBondingCurve ? 'Bonding Curve' : formatAddress(holder.address)}
                         </span>
                       </div>
                       <div className="text-right">
                         <p className="text-sm font-medium">{(holder.percentage || 0).toFixed(2)}%</p>
                         <p className="text-xs text-muted-foreground">
-                          {formatNumber(holder.balance)}
+                          {formatTokenAmount(holder.balance)}
                         </p>
                       </div>
                     </div>

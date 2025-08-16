@@ -14,7 +14,7 @@ import {
   Wallet
 } from 'lucide-react'
 import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
-import { formatETH, formatWei, formatTokenAmount, formatNumber, isValidETHAmount, parseETHToWei } from '@/lib/utils/format'
+import { formatETH, formatWei, formatFee, formatTokenAmount, formatNumber, formatPrice, isValidETHAmount, parseETHToWei } from '@/lib/utils/format'
 import { formatError } from '@/lib/utils/ui'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { useEstimateTrade, useExecuteTrade, useSlippage } from '@/hooks/useTrades'
@@ -278,7 +278,11 @@ export function TradingInterface({
           Trade {tokenSymbol}
         </h3>
         <div className="text-sm text-gray-600">
-          Price: <span className="text-primary font-semibold">${currentPrice}</span>
+          Price: <span className={`text-primary font-semibold ${
+            currentPrice.length > 15 ? 'text-xs' : 
+            currentPrice.length > 10 ? 'text-sm' : 
+            'text-sm'
+          }`}>${formatPrice(currentPrice)}</span>
         </div>
       </div>
 
@@ -455,7 +459,7 @@ export function TradingInterface({
                 
                 <div className="flex justify-between">
                   <span className="text-gray-600">Platform fee</span>
-                  <span className="font-semibold">{formatWei(estimateData.fee || '0')} ETH</span>
+                  <span className="font-semibold">{formatFee(estimateData.fee || '0')} ETH</span>
                 </div>
                 
                 <div className="flex justify-between border-t border-gray-200 pt-2">

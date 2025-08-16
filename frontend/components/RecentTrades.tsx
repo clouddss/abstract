@@ -2,7 +2,7 @@ import React from 'react'
 import Link from 'next/link'
 import { Activity, TrendingUp, TrendingDown, AlertCircle } from 'lucide-react'
 import { useTrades } from '@/hooks/useTrades'
-import { formatETH, formatAddress, formatTimestamp } from '@/lib/utils/format'
+import { formatETH, formatTokenAmount, formatAddress, formatTimestamp, calculateUSDValue } from '@/lib/utils/format'
 import { Skeleton } from './ui/skeleton'
 import { TradeType } from '@/lib/api/types/common.types'
 
@@ -79,7 +79,7 @@ export function RecentTrades({ tokenAddress, limit = 5 }: RecentTradesProps) {
                       </>
                     )}
                     {' '}
-                    {formatETH(trade.amountOut)} tokens
+                    {formatTokenAmount(trade.type === TradeType.BUY ? trade.amountOut : trade.amountIn)} tokens
                   </p>
                   <p className="text-xs text-gray-500">
                     {formatAddress(trade.trader)} • {formatTimestamp(trade.timestamp)}
@@ -87,8 +87,12 @@ export function RecentTrades({ tokenAddress, limit = 5 }: RecentTradesProps) {
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-sm font-medium text-gray-900">{formatETH(trade.amountIn)} ETH</p>
-                <p className="text-xs text-gray-500">${trade.price}</p>
+                <p className="text-sm font-medium text-gray-900">
+                  {formatETH(trade.type === TradeType.BUY ? trade.amountIn : trade.amountOut)} ETH
+                </p>
+                <p className="text-xs text-gray-500">
+                  {calculateUSDValue(trade.type === TradeType.BUY ? trade.amountIn : trade.amountOut)}
+                </p>
               </div>
             </div>
           ))
