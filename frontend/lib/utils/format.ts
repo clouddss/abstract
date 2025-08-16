@@ -72,7 +72,7 @@ export function formatFee(value: string | bigint): string {
   }
 }
 
-// Format token amounts (already in readable units)
+// Format token amounts (already in readable units) - always show full number
 export function formatTokenAmount(value: string | bigint, decimals: number = 4): string {
   try {
     // If value is in wei format (large number), convert it
@@ -82,19 +82,16 @@ export function formatTokenAmount(value: string | bigint, decimals: number = 4):
       
       // Remove unnecessary decimals for whole numbers
       if (num >= 1 && num % 1 === 0) {
-        return formatNumber(num, 0)
-      }
-      
-      // For large numbers, use compact notation
-      if (num > 1000000) {
-        return formatNumber(num, 2)
+        // Use toLocaleString to add commas but show full number
+        return num.toLocaleString('en-US', { maximumFractionDigits: 0 })
       }
       
       // For numbers with decimals
       if (num >= 1) {
-        return num.toFixed(Math.min(decimals, 2))
+        return num.toLocaleString('en-US', { maximumFractionDigits: 2 })
       }
       
+      // Small numbers keep more decimals
       return num.toFixed(decimals)
     }
     
@@ -102,18 +99,16 @@ export function formatTokenAmount(value: string | bigint, decimals: number = 4):
     
     // Remove unnecessary decimals for whole numbers
     if (num >= 1 && num % 1 === 0) {
-      return formatNumber(num, 0)
-    }
-    
-    if (num > 1000000) {
-      return formatNumber(num, 2)
+      // Use toLocaleString to add commas but show full number
+      return num.toLocaleString('en-US', { maximumFractionDigits: 0 })
     }
     
     // For numbers with decimals
     if (num >= 1) {
-      return num.toFixed(Math.min(decimals, 2))
+      return num.toLocaleString('en-US', { maximumFractionDigits: 2 })
     }
     
+    // Small numbers keep more decimals
     return num.toFixed(decimals)
   } catch {
     return '0'

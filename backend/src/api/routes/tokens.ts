@@ -254,12 +254,17 @@ router.get('/:address', validateRequest(getTokenSchema), async (req, res) => {
     const bondingCurveBalance = BigInt(token.curveSupply) - BigInt(token.soldSupply);
     const allHolders = [];
     
+    // Calculate circulating supply (only tokens that are actually distributed)
+    // For bonding curve tokens, this is the sold supply + bonding curve balance
+    // We use curveSupply as the denominator since that's the max that can be in circulation before migration
+    const circulatingSupply = token.migrated ? token.totalSupply : token.curveSupply;
+    
     // Add bonding curve as first holder if it has balance
     if (bondingCurveBalance > 0n && !token.migrated) {
       allHolders.push({
         address: token.bondingCurve,
         balance: bondingCurveBalance.toString(),
-        percentage: calculateHolderPercentage(bondingCurveBalance.toString(), token.totalSupply),
+        percentage: calculateHolderPercentage(bondingCurveBalance.toString(), circulatingSupply),
         firstBought: token.createdAt,
         lastActivity: token.updatedAt,
         isBondingCurve: true
@@ -272,7 +277,7 @@ router.get('/:address', validateRequest(getTokenSchema), async (req, res) => {
       .map(holder => ({
         address: holder.wallet,
         balance: holder.balance,
-        percentage: calculateHolderPercentage(holder.balance, token.totalSupply),
+        percentage: calculateHolderPercentage(holder.balance, circulatingSupply),
         firstBought: holder.firstBoughtAt,
         lastActivity: holder.lastActivity,
         isBondingCurve: false

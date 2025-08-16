@@ -2,6 +2,7 @@ import { ethers } from 'ethers';
 import { prisma } from '../../database/client';
 import { getBlockTimestamp, calculateTokenPrice } from '../ethereum';
 import { TradeType } from '@prisma/client';
+import { chartService } from '../../services/chartService';
 
 export interface TokensPurchasedEvent {
   buyer: string;
@@ -64,6 +65,9 @@ export async function handleTokensPurchased(event: TokensPurchasedEvent): Promis
 
     // Update price data for charts
     await updatePriceData(event.tokenAddress, event.newPrice, event.ethAmount, timestamp);
+    
+    // Update chart data using chartService
+    await chartService.updateChartDataForTrade(trade);
 
     console.log(`✅ Purchase processed: Trade ID ${trade.id}`);
 
@@ -112,6 +116,9 @@ export async function handleTokensSold(event: TokensSoldEvent): Promise<void> {
 
     // Update price data
     await updatePriceData(event.tokenAddress, event.newPrice, event.ethAmount, timestamp);
+    
+    // Update chart data using chartService
+    await chartService.updateChartDataForTrade(trade);
 
     console.log(`✅ Sale processed: Trade ID ${trade.id}`);
 

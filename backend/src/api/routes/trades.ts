@@ -7,6 +7,7 @@ import { authMiddleware } from '../middleware/auth';
 import { getProvider, BONDING_CURVE_ABI } from '../../contracts/LaunchFactory';
 import { TradeType } from '@prisma/client';
 import { getCachedVolumeData, invalidateVolumeCache } from '../services/volumeCache';
+import { chartService } from '../../services/chartService';
 
 const router = Router();
 
