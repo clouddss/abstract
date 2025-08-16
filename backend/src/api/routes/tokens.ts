@@ -171,8 +171,8 @@ router.get('/:address', validateRequest(getTokenSchema), async (req, res) => {
       // Optimized: Get counts efficiently
       prisma.$queryRaw<Array<{ trade_count: bigint, holder_count: bigint }>>`
         SELECT 
-          (SELECT COUNT(*) FROM trades WHERE token_address = ${address.toLowerCase()}) as trade_count,
-          (SELECT COUNT(*) FROM holders WHERE token_address = ${address.toLowerCase()} AND balance::numeric > 0) as holder_count
+          (SELECT COUNT(*) FROM trades WHERE "tokenAddress" = ${address.toLowerCase()}) as trade_count,
+          (SELECT COUNT(*) FROM holders WHERE "tokenAddress" = ${address.toLowerCase()} AND balance::numeric > 0) as holder_count
       `
     ]);
 
