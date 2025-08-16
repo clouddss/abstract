@@ -139,11 +139,7 @@ export function TradingInterface({
             if (receipt.status === 'success') {
               // Confirm the trade with the backend to record it in the database
               try {
-                await tradesService.confirmTrade({
-                  txHash: hash,
-                  tokenAddress,
-                  tradeType
-                })
+                await tradesService.confirmTrade(hash, tokenAddress, tradeType === 'buy' ? 'buy' : 'sell')
               } catch (confirmError) {
                 console.error('Failed to confirm trade with backend:', confirmError)
                 // Don't show error to user since the blockchain transaction succeeded
@@ -405,7 +401,7 @@ export function TradingInterface({
               value={slippageInput}
               onChange={(e) => setSlippageInput(e.target.value)}
               placeholder="Custom"
-              className="flex-1 px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-md focus:ring-1 focus:ring-primary"
+              className="w-20 px-2 py-2 text-sm bg-gray-50 border border-gray-200 rounded-md focus:ring-1 focus:ring-primary"
             />
           </div>
         </div>
