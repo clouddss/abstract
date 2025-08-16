@@ -1,4 +1,5 @@
 // Performance monitoring utilities for frontend
+import { useEffect } from 'react';
 
 export interface PerformanceMetrics {
   timestamp: number;
@@ -265,7 +266,7 @@ export const performanceMonitor = new PerformanceMonitor();
 export function usePerformanceMonitor(componentName: string) {
   const startTime = Date.now();
 
-  React.useEffect(() => {
+  useEffect(() => {
     return () => {
       const duration = Date.now() - startTime;
       performanceMonitor.recordComponentRender(componentName, duration);
