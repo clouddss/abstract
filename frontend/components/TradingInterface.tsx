@@ -95,7 +95,7 @@ export function TradingInterface({
     setIsTrading(true)
     
     try {
-      const minAmountOut = calculateMinOutput(estimateData.amountOut)
+      const minAmountOut = calculateMinOutput(estimateData.amountOut || estimateData.outputAmount)
       
       const result = await executeTrade.mutateAsync({
         tokenAddress,
