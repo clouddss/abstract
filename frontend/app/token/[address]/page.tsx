@@ -241,7 +241,7 @@ export default function TokenPage() {
               <span>Holders</span>
             </div>
             <span className="text-xl font-bold">
-              {isLoading ? <Skeleton className="h-6 w-16" /> : formatNumber(token?.stats?.totalHolders || token?.holderCount || 0, 0)}
+              {isLoading ? <Skeleton className="h-6 w-16" /> : formatNumber(token?.stats?.totalHolders || token?.topHolders?.length || 0, 0)}
             </span>
           </div>
 
