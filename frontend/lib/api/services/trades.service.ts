@@ -127,32 +127,6 @@ export class TradesService {
   }
 
   /**
-   * Confirm a trade after blockchain confirmation
-   */
-  async confirmTrade(txHash: string, tokenAddress: string, tradeType: 'buy' | 'sell'): Promise<any> {
-    return apiClient.post('/trades/confirm', {
-      txHash,
-      tokenAddress,
-      tradeType
-    });
-  }
-
-  /**
-   * Get trade status by transaction hash
-   */
-  async confirmTrade(data: {
-    txHash: string;
-    tokenAddress: Address;
-    tradeType: 'buy' | 'sell';
-  }): Promise<{
-    success: boolean;
-    data?: any;
-    message: string;
-  }> {
-    return apiClient.post('/trades/confirm', data);
-  }
-
-  /**
    * Get trade status by transaction hash
    */
   async getTradeStatus(txHash: string): Promise<TradeStatus> {
