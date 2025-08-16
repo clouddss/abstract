@@ -1,8 +1,15 @@
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
+import "@matterlabs/hardhat-zksync";
 import "dotenv/config";
 
 const config: HardhatUserConfig = {
+  zksolc: {
+    version: "latest",
+    settings: {
+      // Additional zksolc settings can be added here
+    },
+  },
   solidity: {
     version: "0.8.20",
     settings: {
@@ -13,14 +20,18 @@ const config: HardhatUserConfig = {
       viaIR: true,
     },
   },
+  defaultNetwork: "abstractTestnet",
   networks: {
     hardhat: {
       allowUnlimitedContractSize: true,
+      zksync: false,
     },
-    "abstract-testnet": {
+    abstractTestnet: {
       url: process.env.ABSTRACT_RPC_URL || "https://api.testnet.abs.xyz",
+      ethNetwork: "sepolia",
       accounts: process.env.DEPLOYER_PRIVATE_KEY ? [process.env.DEPLOYER_PRIVATE_KEY] : [],
       chainId: 11124,
+      zksync: true,
       allowUnlimitedContractSize: true,
     },
   },
