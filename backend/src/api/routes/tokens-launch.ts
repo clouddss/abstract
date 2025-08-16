@@ -6,7 +6,6 @@ import { validateRequest } from '../middleware/validation';
 import { authMiddleware } from '../middleware/auth';
 import { 
   getLaunchFee, 
-  estimateGasForDeploy, 
   encodeDeployTokenData,
   CONTRACT_ADDRESSES,
   getProvider,
@@ -53,9 +52,6 @@ router.post('/launch', authMiddleware, validateRequest(launchTokenSchema), async
     // Get launch fee from contract
     const launchFee = await getLaunchFee();
     
-    // Estimate gas
-    const estimatedGas = await estimateGasForDeploy(name, symbol);
-    
     // Encode the transaction data
     const data = encodeDeployTokenData(name, symbol);
 
@@ -66,7 +62,6 @@ router.post('/launch', authMiddleware, validateRequest(launchTokenSchema), async
         to: CONTRACT_ADDRESSES.LAUNCH_FACTORY,
         data,
         value: launchFee.toString(),
-        estimatedGas: estimatedGas.toString(),
         launchFee: ethers.formatEther(launchFee),
         message: 'Please sign the transaction in your wallet to launch the token'
       }

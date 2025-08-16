@@ -39,7 +39,6 @@ export class TokensService {
     to: string;
     data: string;
     value: string;
-    estimatedGas: string;
     launchFee: string;
     message: string;
   }> {

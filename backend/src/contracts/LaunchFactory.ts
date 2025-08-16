@@ -209,9 +209,9 @@ export async function getLaunchFee(): Promise<bigint> {
 }
 
 export async function estimateGasForDeploy(name: string, symbol: string): Promise<bigint> {
-  // Return a reasonable default gas limit
-  // The frontend will do proper estimation with the user's wallet
-  return 1000000n;
+  // Return a reasonable default gas limit for token deployment
+  // Most token deployments use 200k-300k gas
+  return 300000n;
 }
 
 export function encodeDeployTokenData(name: string, symbol: string): string {

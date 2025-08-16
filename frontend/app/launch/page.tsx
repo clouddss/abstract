@@ -75,6 +75,7 @@ export default function LaunchPage() {
         to: to as `0x${string}`,
         data: data as `0x${string}`,
         value: BigInt(value)
+        // Don't specify gas - let wallet estimate it
       })
 
       console.log('Transaction sent:', hash)
