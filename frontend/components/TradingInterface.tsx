@@ -18,6 +18,8 @@ import { formatETH, formatWei, formatTokenAmount, formatNumber, isValidETHAmount
 import { formatError } from '@/lib/utils/ui'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { useEstimateTrade, useExecuteTrade, useSlippage } from '@/hooks/useTrades'
+import { tradesService } from '@/lib/api/services/trades.service'
+import { useQueryClient } from '@tanstack/react-query'
 import { TradeType, Address } from '@/lib/api/types/common.types'
 import { toast } from 'sonner'
 import { useErrorHandler, getTransactionErrorMessage } from '@/lib/utils/error-handling'
@@ -40,6 +42,7 @@ export function TradingInterface({
   const { address, isConnected } = useAccount()
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient()
+  const queryClient = useQueryClient()
   const [tradeType, setTradeType] = useState<'buy' | 'sell'>('buy')
   const [amount, setAmount] = useState('')
   const [slippageInput, setSlippageInput] = useState('1.0')
@@ -134,6 +137,18 @@ export function TradingInterface({
             })
             
             if (receipt.status === 'success') {
+              // Confirm the trade with the backend to record it in the database
+              try {
+                await tradesService.confirmTrade({
+                  txHash: hash,
+                  tokenAddress,
+                  tradeType
+                })
+              } catch (confirmError) {
+                console.error('Failed to confirm trade with backend:', confirmError)
+                // Don't show error to user since the blockchain transaction succeeded
+              }
+              
               toast.success(
                 `Successfully ${tradeType === 'buy' ? 'bought' : 'sold'} ${tokenSymbol}!`,
                 {
@@ -145,6 +160,14 @@ export function TradingInterface({
                 }
               )
               setAmount('')
+              
+              // Force immediate cache invalidation for UI updates
+              queryClient.invalidateQueries({ 
+                queryKey: ['token', tokenAddress] 
+              })
+              queryClient.invalidateQueries({ 
+                queryKey: ['trades']
+              })
             } else {
               toast.error('Transaction failed')
             }
@@ -170,6 +193,14 @@ export function TradingInterface({
           }
         )
         setAmount('')
+        
+        // Force immediate cache invalidation for UI updates
+        queryClient.invalidateQueries({ 
+          queryKey: ['token', tokenAddress] 
+        })
+        queryClient.invalidateQueries({ 
+          queryKey: ['trades']
+        })
       } else {
         toast.error(result.message || 'Trade failed')
       }
