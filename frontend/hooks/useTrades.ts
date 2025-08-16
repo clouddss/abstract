@@ -77,6 +77,10 @@ export function useExecuteTrade() {
       queryClient.invalidateQueries({ 
         queryKey: ['trades', 'token', variables.tokenAddress] 
       })
+      // Force refetch of all trades queries
+      queryClient.invalidateQueries({ 
+        queryKey: ['trades']
+      })
     },
     retry: 1,
   })
@@ -109,6 +113,10 @@ export function useTradeStatus(txHash: string | undefined, enabled: boolean = tr
           if (finalStatus.trade) {
             queryClient.invalidateQueries({ 
               queryKey: ['token', finalStatus.trade.id] 
+            })
+            // Also invalidate all trades queries
+            queryClient.invalidateQueries({ 
+              queryKey: ['trades']
             })
           }
         }

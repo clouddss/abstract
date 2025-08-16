@@ -1,23 +1,23 @@
-# Multi-stage Dockerfile for production deployment
+# Production Dockerfile for Abstract Pump Backend
 FROM node:18-alpine AS builder
 
-# Install build dependencies
-RUN apk add --no-cache python3 make g++
+# Install build dependencies and security updates
+RUN apk add --no-cache python3 make g++ libc6-compat \
+  && apk upgrade --no-cache
 
 # Set working directory
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
+COPY tsconfig.json ./
 COPY prisma ./prisma/
 
-# Install dependencies
-RUN npm ci --only=production
-RUN npm install -g typescript
-RUN npm install --save-dev @types/node
+# Install all dependencies (including dev dependencies for build)
+RUN npm ci --frozen-lockfile
 
 # Copy source code
-COPY . .
+COPY src ./src/
 
 # Generate Prisma client
 RUN npx prisma generate
@@ -25,45 +25,62 @@ RUN npx prisma generate
 # Build application
 RUN npm run build
 
+# Remove dev dependencies
+RUN npm prune --production
+
 # Production stage
 FROM node:18-alpine AS production
 
-# Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init
+# Install dumb-init for proper signal handling and security updates
+RUN apk add --no-cache dumb-init curl \
+  && apk upgrade --no-cache
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nodejs -u 1001
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs \
+  && adduser -S nodejs -u 1001
 
 # Set working directory
 WORKDIR /app
 
-# Copy package files and install production dependencies
+# Copy package files
 COPY package*.json ./
-RUN npm ci --only=production && npm cache clean --force
 
-# Copy Prisma files
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+# Install production dependencies with frozen lockfile for security
+RUN npm ci --only=production --frozen-lockfile \
+  && npm cache clean --force \
+  && rm -rf /tmp/* /var/cache/apk/*
 
-# Copy built application
-COPY --from=builder /app/dist ./dist
+# Copy built application and necessary files from builder
+COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
+COPY --from=builder --chown=nodejs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder --chown=nodejs:nodejs /app/prisma ./prisma
 
-# Change ownership
-RUN chown -R nodejs:nodejs /app
+# Create necessary directories with proper permissions
+RUN mkdir -p /app/logs /app/uploads \
+  && chown -R nodejs:nodejs /app
 
 # Switch to non-root user
 USER nodejs
 
-# Expose ports
+# Expose port
 EXPOSE 3001
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); })"
+# Enhanced health check with proper error handling
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD curl -f http://localhost:3001/health || exit 1
+
+# Set production environment variables
+ENV NODE_ENV=production
+ENV NODE_OPTIONS="--max-old-space-size=2048 --enable-source-maps"
 
 # Use dumb-init to handle signals properly
 ENTRYPOINT ["dumb-init", "--"]
 
-# Start application
+# Start application with proper signal handling
 CMD ["node", "dist/index.js"]
+
+# Metadata labels
+LABEL maintainer="Abstract Pump Platform"
+LABEL version="1.0.0"
+LABEL description="Production backend for Abstract Pump Platform"
+LABEL security.scan="enabled"

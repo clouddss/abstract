@@ -213,7 +213,7 @@ router.get('/:address', validateRequest(getTokenSchema), async (req, res) => {
     const { address } = req.params;
 
     const token = await prisma.token.findUnique({
-      where: { address },
+      where: { address: address.toLowerCase() },
       include: {
         trades: {
           orderBy: { timestamp: 'desc' },
@@ -395,12 +395,12 @@ router.get('/:address/trades', async (req, res) => {
 
     const [trades, total] = await Promise.all([
       prisma.trade.findMany({
-        where: { tokenAddress: address },
+        where: { tokenAddress: address.toLowerCase() },
         orderBy: { timestamp: 'desc' },
         skip,
         take: limit
       }),
-      prisma.trade.count({ where: { tokenAddress: address } })
+      prisma.trade.count({ where: { tokenAddress: address.toLowerCase() } })
     ]);
 
     res.json({
@@ -444,7 +444,7 @@ async function getCurrentTokenPrice(address: string): Promise<string> {
   try {
     // Get token from database to find bonding curve
     const token = await prisma.token.findUnique({
-      where: { address },
+      where: { address: address.toLowerCase() },
       select: { bondingCurve: true, migrated: true }
     });
     
@@ -455,7 +455,7 @@ async function getCurrentTokenPrice(address: string): Promise<string> {
     // If migrated, get price from trades
     if (token.migrated) {
       const latestTrade = await prisma.trade.findFirst({
-        where: { tokenAddress: address },
+        where: { tokenAddress: address.toLowerCase() },
         orderBy: { timestamp: 'desc' }
       });
       return latestTrade?.price || '0';
@@ -485,12 +485,12 @@ async function getPriceChange24h(address: string): Promise<number> {
 
     const [currentTrade, oldTrade] = await Promise.all([
       prisma.trade.findFirst({
-        where: { tokenAddress: address },
+        where: { tokenAddress: address.toLowerCase() },
         orderBy: { timestamp: 'desc' }
       }),
       prisma.trade.findFirst({
         where: { 
-          tokenAddress: address,
+          tokenAddress: address.toLowerCase(),
           timestamp: { lte: oneDayAgo }
         },
         orderBy: { timestamp: 'desc' }
