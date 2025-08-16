@@ -32,6 +32,11 @@ export interface ExecuteTradeResponse {
   txHash: string;
   status: 'pending' | 'success' | 'failed';
   message: string;
+  transactionData?: {
+    to: string;
+    data: string;
+    value: string;
+  };
 }
 
 export interface TradeStatus {

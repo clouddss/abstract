@@ -13,7 +13,7 @@ import {
   CheckCircle,
   Wallet
 } from 'lucide-react'
-import { useAccount } from 'wagmi'
+import { useAccount, useWalletClient, usePublicClient } from 'wagmi'
 import { formatETH, formatWei, formatTokenAmount, formatNumber, isValidETHAmount, parseETHToWei } from '@/lib/utils/format'
 import { formatError } from '@/lib/utils/ui'
 import { useWebSocket } from '@/hooks/useWebSocket'
@@ -38,6 +38,8 @@ export function TradingInterface({
   className = ''
 }: TradingInterfaceProps) {
   const { address, isConnected } = useAccount()
+  const { data: walletClient } = useWalletClient()
+  const publicClient = usePublicClient()
   const [tradeType, setTradeType] = useState<'buy' | 'sell'>('buy')
   const [amount, setAmount] = useState('')
   const [slippageInput, setSlippageInput] = useState('1.0')
@@ -97,6 +99,7 @@ export function TradingInterface({
     try {
       const minAmountOut = calculateMinOutput(estimateData.amountOut || estimateData.outputAmount)
       
+      // Get transaction data from backend
       const result = await executeTrade.mutateAsync({
         tokenAddress,
         type: tradeType === 'buy' ? TradeType.BUY : TradeType.SELL,
@@ -104,7 +107,57 @@ export function TradingInterface({
         minAmountOut
       })
       
-      if (result.status === 'success') {
+      // If we have transaction data, send it through the wallet
+      if (result.transactionData && walletClient) {
+        try {
+          const { to, data, value } = result.transactionData
+          
+          // Send transaction through wallet
+          const hash = await walletClient.sendTransaction({
+            to: to as `0x${string}`,
+            data: data as `0x${string}`,
+            value: BigInt(value),
+            account: address!,
+            chain: walletClient.chain
+          })
+          
+          toast.info('Transaction submitted! Waiting for confirmation...', {
+            duration: 5000
+          })
+          
+          // Wait for transaction confirmation
+          if (publicClient) {
+            const receipt = await publicClient.waitForTransactionReceipt({
+              hash,
+              confirmations: 1
+            })
+            
+            if (receipt.status === 'success') {
+              toast.success(
+                `Successfully ${tradeType === 'buy' ? 'bought' : 'sold'} ${tokenSymbol}!`,
+                {
+                  duration: 5000,
+                  action: {
+                    label: 'View Transaction',
+                    onClick: () => window.open(`${process.env.NEXT_PUBLIC_CHAIN_EXPLORER_URL}/tx/${hash}`, '_blank')
+                  }
+                }
+              )
+              setAmount('')
+            } else {
+              toast.error('Transaction failed')
+            }
+          }
+        } catch (walletError: any) {
+          console.error('Wallet transaction error:', walletError)
+          if (walletError.message?.includes('rejected')) {
+            toast.error('Transaction rejected by user')
+          } else {
+            toast.error(walletError.message || 'Failed to send transaction')
+          }
+        }
+      } else if (result.status === 'success') {
+        // Fallback for direct execution (shouldn't happen with current flow)
         toast.success(
           `Successfully ${tradeType === 'buy' ? 'bought' : 'sold'} ${tokenSymbol}!`,
           {
