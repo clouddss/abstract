@@ -321,14 +321,17 @@ export function measureWebVitals() {
   // First Input Delay
   const fidObserver = new PerformanceObserver((list) => {
     const entries = list.getEntries();
-    entries.forEach((entry) => {
-      const fid = entry.processingStart - entry.startTime;
-      
-      performanceMonitor.recordApiCall(
-        'web_vitals_fid',
-        fid,
-        fid < 100 // Good FID is < 100ms
-      );
+    entries.forEach((entry: any) => {
+      // Type assertion needed as processingStart is not in base PerformanceEntry type
+      if ('processingStart' in entry && 'startTime' in entry) {
+        const fid = entry.processingStart - entry.startTime;
+        
+        performanceMonitor.recordApiCall(
+          'web_vitals_fid',
+          fid,
+          fid < 100 // Good FID is < 100ms
+        );
+      }
     });
   });
 
