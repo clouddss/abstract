@@ -14,7 +14,7 @@ import {
   Wallet
 } from 'lucide-react'
 import { useAccount } from 'wagmi'
-import { formatETH, formatNumber, isValidETHAmount, parseETHToWei } from '@/lib/utils/format'
+import { formatETH, formatWei, formatTokenAmount, formatNumber, isValidETHAmount, parseETHToWei } from '@/lib/utils/format'
 import { formatError } from '@/lib/utils/ui'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { useEstimateTrade, useExecuteTrade, useSlippage } from '@/hooks/useTrades'
@@ -304,7 +304,10 @@ export function TradingInterface({
                 <div className="flex justify-between">
                   <span className="text-gray-600">You receive</span>
                   <span className="font-semibold text-primary">
-                    {formatETH(estimateData.amountOut || estimateData.outputAmount)} {tradeType === 'buy' ? tokenSymbol : 'ETH'}
+                    {tradeType === 'buy' 
+                      ? formatTokenAmount(estimateData.amountOut || estimateData.outputAmount)
+                      : formatWei(estimateData.amountOut || estimateData.outputAmount)
+                    } {tradeType === 'buy' ? tokenSymbol : 'ETH'}
                   </span>
                 </div>
                 
@@ -317,13 +320,16 @@ export function TradingInterface({
                 
                 <div className="flex justify-between">
                   <span className="text-gray-600">Platform fee</span>
-                  <span className="font-semibold">{formatETH(estimateData.fee)} ETH</span>
+                  <span className="font-semibold">{formatWei(estimateData.fee)} ETH</span>
                 </div>
                 
                 <div className="flex justify-between border-t border-gray-200 pt-2">
                   <span className="text-gray-600">Minimum received</span>
                   <span className="font-semibold">
-                    {formatETH(calculateMinOutput(estimateData.amountOut || estimateData.outputAmount))}
+                    {tradeType === 'buy'
+                      ? formatTokenAmount(calculateMinOutput(estimateData.amountOut || estimateData.outputAmount))
+                      : formatWei(calculateMinOutput(estimateData.amountOut || estimateData.outputAmount))
+                    }
                     {' '}{tradeType === 'buy' ? tokenSymbol : 'ETH'}
                   </span>
                 </div>

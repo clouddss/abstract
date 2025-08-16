@@ -4,9 +4,9 @@ import { formatEther, parseEther } from 'viem'
 export function formatETH(value: string | number | bigint, decimals: number = 4): string {
   try {
     if (typeof value === 'string') {
-      // If it's already in ETH format, just format decimals
+      // Check if it's already in ETH format (has decimal point and is small)
       const num = parseFloat(value)
-      if (!isNaN(num)) {
+      if (!isNaN(num) && value.includes('.')) {
         return num.toFixed(decimals)
       }
     }
@@ -14,6 +14,43 @@ export function formatETH(value: string | number | bigint, decimals: number = 4)
     // Convert from wei to ETH
     const eth = formatEther(BigInt(value))
     return parseFloat(eth).toFixed(decimals)
+  } catch {
+    return '0.0000'
+  }
+}
+
+// Format wei values directly to ETH
+export function formatWei(value: string | bigint, decimals: number = 4): string {
+  try {
+    const eth = formatEther(BigInt(value))
+    const num = parseFloat(eth)
+    
+    // Handle very small numbers
+    if (num > 0 && num < 0.0001) {
+      return num.toExponential(2)
+    }
+    
+    return num.toFixed(decimals)
+  } catch {
+    return '0.0000'
+  }
+}
+
+// Format token amounts (already in readable units)
+export function formatTokenAmount(value: string | bigint, decimals: number = 4): string {
+  try {
+    // If value is in wei format (large number), convert it
+    if (typeof value === 'string' && value.length > 15) {
+      return formatWei(value, decimals)
+    }
+    
+    const num = typeof value === 'string' ? parseFloat(value) : Number(value)
+    
+    if (num > 1000000) {
+      return formatNumber(num, 2)
+    }
+    
+    return num.toFixed(decimals)
   } catch {
     return '0.0000'
   }
