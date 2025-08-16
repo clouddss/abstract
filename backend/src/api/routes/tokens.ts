@@ -243,7 +243,8 @@ router.get('/:address', validateRequest(getTokenSchema), async (req, res) => {
     }
 
     // Calculate additional metrics
-    const progress = calculateProgress(token.soldSupply, token.curveSupply);
+    const bondingCurveProgress = await getBondingCurveProgress(token);
+    const migrationProgress = await getMigrationProgress(token);
     const currentPrice = await getCurrentTokenPrice(address);
     
     // Get 24h price change
@@ -274,14 +275,16 @@ router.get('/:address', validateRequest(getTokenSchema), async (req, res) => {
       success: true,
       data: {
         ...token,
-        progress,
+        bondingCurveProgress,
+        migrationProgress,
         currentPrice,
         priceChange24h,
         topHolders,
         recentTrades,
         stats: {
           totalTrades: token._count.trades,
-          totalHolders: token._count.holders
+          totalHolders: token._count.holders,
+          actualHolders: token.holders.filter(h => BigInt(h.balance) > 0n).length
         }
       }
     });
@@ -445,7 +448,7 @@ async function getCurrentTokenPrice(address: string): Promise<string> {
     // Get token from database to find bonding curve
     const token = await prisma.token.findUnique({
       where: { address: address.toLowerCase() },
-      select: { bondingCurve: true, migrated: true }
+      select: { bondingCurve: true, migrated: true, marketCap: true, soldSupply: true }
     });
     
     if (!token || !token.bondingCurve) {
@@ -458,7 +461,7 @@ async function getCurrentTokenPrice(address: string): Promise<string> {
         where: { tokenAddress: address.toLowerCase() },
         orderBy: { timestamp: 'desc' }
       });
-      return latestTrade?.price || '0';
+      return latestTrade?.price ? ethers.formatEther(latestTrade.price) : '0';
     }
     
     // Get price from bonding curve contract
@@ -470,8 +473,19 @@ async function getCurrentTokenPrice(address: string): Promise<string> {
       provider
     );
     
-    const price = await bondingCurve.getCurrentPrice();
-    return ethers.formatEther(price);
+    try {
+      const price = await bondingCurve.getCurrentPrice();
+      return ethers.formatEther(price);
+    } catch {
+      // Fallback: calculate price from market cap and supply
+      if (token.marketCap && token.soldSupply && BigInt(token.soldSupply) > 0n) {
+        const marketCapWei = BigInt(token.marketCap);
+        const soldSupply = BigInt(token.soldSupply);
+        const priceWei = (marketCapWei * ethers.parseEther('1')) / soldSupply;
+        return ethers.formatEther(priceWei);
+      }
+      return '0.000001'; // Default minimum price
+    }
   } catch (error) {
     console.error('Error getting token price:', error);
     return '0';
@@ -506,6 +520,80 @@ async function getPriceChange24h(address: string): Promise<number> {
 
     return ((currentPrice - oldPrice) / oldPrice) * 100;
   } catch {
+    return 0;
+  }
+}
+
+/**
+ * Calculate bonding curve progress (how much of the curve is sold)
+ */
+async function getBondingCurveProgress(token: any): Promise<number> {
+  try {
+    if (!token.bondingCurve) return 0;
+    
+    const { getProvider, BONDING_CURVE_ABI } = await import('../../contracts/LaunchFactory');
+    const provider = getProvider();
+    const bondingCurve = new ethers.Contract(
+      token.bondingCurve,
+      BONDING_CURVE_ABI,
+      provider
+    );
+    
+    // Try to get actual progress from contract
+    try {
+      const [tokensSold, maxSupply] = await Promise.all([
+        bondingCurve.tokensSold ? bondingCurve.tokensSold() : BigInt(token.soldSupply || '0'),
+        bondingCurve.maxSupply ? bondingCurve.maxSupply() : BigInt(token.curveSupply || '700000000000000000000000000')
+      ]);
+      
+      if (maxSupply === 0n) return 0;
+      return Number((tokensSold * 10000n) / maxSupply) / 100;
+    } catch {
+      // Fallback to database values
+      const sold = BigInt(token.soldSupply || '0');
+      const curve = BigInt(token.curveSupply || '700000000000000000000000000');
+      if (curve === 0n) return 0;
+      return Number((sold * 10000n) / curve) / 100;
+    }
+  } catch (error) {
+    console.error('Error calculating bonding curve progress:', error);
+    return 0;
+  }
+}
+
+/**
+ * Calculate migration progress (ETH raised vs migration threshold)
+ */
+async function getMigrationProgress(token: any): Promise<number> {
+  try {
+    if (!token.bondingCurve) return 0;
+    
+    const { getProvider, BONDING_CURVE_ABI } = await import('../../contracts/LaunchFactory');
+    const provider = getProvider();
+    const bondingCurve = new ethers.Contract(
+      token.bondingCurve,
+      BONDING_CURVE_ABI,
+      provider
+    );
+    
+    // Migration threshold is typically 85 ETH for Abstract
+    const MIGRATION_THRESHOLD = ethers.parseEther('85');
+    
+    try {
+      // Get current ETH balance in bonding curve
+      const ethBalance = await provider.getBalance(token.bondingCurve);
+      
+      if (MIGRATION_THRESHOLD === 0n) return 100;
+      const progress = Number((ethBalance * 10000n) / MIGRATION_THRESHOLD) / 100;
+      return Math.min(progress, 100); // Cap at 100%
+    } catch {
+      // Fallback calculation based on volume
+      const volumeTotal = BigInt(token.volumeTotal || '0');
+      const progress = Number((volumeTotal * 10000n) / MIGRATION_THRESHOLD) / 100;
+      return Math.min(progress, 100);
+    }
+  } catch (error) {
+    console.error('Error calculating migration progress:', error);
     return 0;
   }
 }
