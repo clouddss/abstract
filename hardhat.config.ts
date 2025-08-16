@@ -5,7 +5,7 @@ import "dotenv/config";
 
 const config: HardhatUserConfig = {
   zksolc: {
-    version: "latest",
+    version: "1.5.6",
     settings: {
       // Additional zksolc settings can be added here
     },
