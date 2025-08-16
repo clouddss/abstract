@@ -5,6 +5,7 @@ import './globals.css'
 import { Providers } from './providers'
 import { Navigation } from '@/components/Navigation'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { ErrorFallback } from '@/components/ErrorFallback'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -66,20 +67,7 @@ export default function RootLayout({
       <body className={`${inter.className} min-h-screen bg-background text-foreground`}>
         <ErrorBoundary>
           <Providers>
-            <ErrorBoundary fallback={
-              <div className="min-h-screen flex items-center justify-center">
-                <div className="text-center">
-                  <h1 className="text-2xl font-bold text-red-500 mb-4">Application Error</h1>
-                  <p className="text-gray-400 mb-4">The application encountered an error. Please refresh the page.</p>
-                  <button 
-                    onClick={() => window.location.reload()} 
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                  >
-                    Refresh Page
-                  </button>
-                </div>
-              </div>
-            }>
+            <ErrorBoundary fallback={<ErrorFallback />}>
               <div className="min-h-screen">
                 <ErrorBoundary>
                   <Navigation />

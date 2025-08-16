@@ -4,6 +4,7 @@ import React, { Component, ReactNode } from 'react';
 import { Button } from './ui/Button';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import Link from 'next/link';
+import { RefreshButton } from './RefreshButton';
 
 interface Props {
   children: ReactNode;
@@ -254,12 +255,9 @@ export function ChartErrorBoundary({ children }: { children: React.ReactNode }) 
           <div className="text-center">
             <AlertTriangle className="w-8 h-8 text-yellow-500 mx-auto mb-2" />
             <p className="text-sm text-gray-400">Chart failed to load</p>
-            <button 
-              onClick={() => window.location.reload()} 
-              className="mt-2 text-xs text-blue-400 hover:text-blue-300"
-            >
+            <RefreshButton className="mt-2 text-xs text-blue-400 hover:text-blue-300">
               Refresh
-            </button>
+            </RefreshButton>
           </div>
         </div>
       }
