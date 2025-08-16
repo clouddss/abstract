@@ -8,11 +8,16 @@ export interface EstimateTradeRequest {
 }
 
 export interface EstimateTradeResponse {
-  amountOut: string;
-  price: string;
+  outputAmount: string;
+  currentPrice: string;
   priceImpact: number;
   fee: string;
-  estimatedGas: string;
+  minimumReceived: string;
+  executionPrice: string;
+  // Keep old field names for compatibility
+  amountOut?: string;
+  price?: string;
+  estimatedGas?: string;
 }
 
 export interface ExecuteTradeRequest {
@@ -93,7 +98,14 @@ export class TradesService {
    * Estimate trade output and impact
    */
   async estimateTrade(data: EstimateTradeRequest): Promise<EstimateTradeResponse> {
-    return apiClient.post<EstimateTradeResponse>('/trades/estimate', data);
+    const response = await apiClient.post<EstimateTradeResponse>('/trades/estimate', data);
+    // Map new field names to old ones for backward compatibility
+    return {
+      ...response,
+      amountOut: response.outputAmount,
+      price: response.currentPrice,
+      estimatedGas: '0' // Default value since backend doesn't return this yet
+    };
   }
 
   /**
@@ -126,11 +138,19 @@ export class TradesService {
   /**
    * Calculate minimum output with slippage
    */
-  calculateMinimumOutput(expectedOutput: string, slippagePercent: number = 0.5): string {
-    const output = BigInt(expectedOutput);
-    const slippage = BigInt(Math.floor(slippagePercent * 100)); // Convert to basis points
-    const minOutput = output - (output * slippage) / BigInt(10000);
-    return minOutput.toString();
+  calculateMinimumOutput(expectedOutput: string | undefined, slippagePercent: number = 0.5): string {
+    if (!expectedOutput || expectedOutput === '0') {
+      return '0';
+    }
+    try {
+      const output = BigInt(expectedOutput);
+      const slippage = BigInt(Math.floor(slippagePercent * 100)); // Convert to basis points
+      const minOutput = output - (output * slippage) / BigInt(10000);
+      return minOutput.toString();
+    } catch (error) {
+      console.error('Error calculating minimum output:', error);
+      return '0';
+    }
   }
 
   /**
