@@ -133,7 +133,7 @@ router.get('/:address', validateRequest(getTokenSchema), async (req, res) => {
     const { address } = req.params;
 
     // OPTIMIZED: Use separate optimized queries instead of include to avoid N+1
-    const [token, recentTrades, topHolders, tradeCounts] = await Promise.all([
+    const [token, recentTrades, holdersFromDb, tradeCounts] = await Promise.all([
       prisma.token.findUnique({
         where: { address: address.toLowerCase() }
       }),
@@ -215,7 +215,7 @@ router.get('/:address', validateRequest(getTokenSchema), async (req, res) => {
     }
     
     // Add regular holders with correct percentage of circulating supply
-    const regularHolders = topHolders.map(holder => {
+    const regularHolders = holdersFromDb.map(holder => {
       // Calculate percentage based on circulating supply (sold tokens only)
       const percentage = circulatingSupply > 0n 
         ? calculateHolderPercentage(holder.balance, token.soldSupply)
@@ -263,7 +263,7 @@ router.get('/:address', validateRequest(getTokenSchema), async (req, res) => {
         stats: {
           totalTrades: Number(tradeCounts[0]?.trade_count || 0),
           totalHolders: Number(tradeCounts[0]?.holder_count || 0),
-          actualHolders: topHolders.length
+          actualHolders: holdersFromDb.length
         }
       }
     });

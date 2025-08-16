@@ -10,6 +10,7 @@ import { ErrorFallback } from '@/components/ErrorFallback'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://pump.abs.xyz'),
   title: 'Abstract Pump - Token Launch Platform',
   description: 'Launch and trade tokens on Abstract with bonding curves and rewards',
   keywords: ['defi', 'tokens', 'abstract', 'ethereum', 'bonding curve'],
@@ -39,11 +40,6 @@ export const metadata: Metadata = {
     creator: '@AbstractChain',
     images: ['/og-image.png'],
   },
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
-  },
   robots: {
     index: true,
     follow: true,
@@ -55,6 +51,12 @@ export const metadata: Metadata = {
       'max-snippet': -1,
     },
   },
+}
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
 }
 
 export default function RootLayout({
