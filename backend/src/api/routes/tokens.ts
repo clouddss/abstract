@@ -195,9 +195,11 @@ router.get('/:address', validateRequest(getTokenSchema), async (req, res) => {
     const bondingCurveBalance = BigInt(token.curveSupply) - BigInt(token.soldSupply);
     const allHolders = [];
     
-    // For percentage calculation, we only consider what's actually in circulation
-    // This is the sold supply (tokens bought by users)
-    const circulatingSupply = BigInt(token.soldSupply);
+    // Calculate total supply held by all users (excluding bonding curve)
+    let totalUserBalance = BigInt(0);
+    for (const holder of holdersFromDb) {
+      totalUserBalance += BigInt(holder.balance);
+    }
     
     // Add bonding curve as first holder showing remaining liquidity
     if (bondingCurveBalance > 0n && !token.migrated) {
@@ -216,10 +218,13 @@ router.get('/:address', validateRequest(getTokenSchema), async (req, res) => {
     
     // Add regular holders with correct percentage of circulating supply
     const regularHolders = holdersFromDb.map(holder => {
-      // Calculate percentage based on circulating supply (sold tokens only)
-      const percentage = circulatingSupply > 0n 
-        ? calculateHolderPercentage(holder.balance, token.soldSupply)
-        : 0;
+      const holderBalance = BigInt(holder.balance);
+      // Calculate percentage based on total user holdings
+      // If a holder has more tokens than soldSupply, cap the percentage at 100%
+      let percentage = 0;
+      if (totalUserBalance > 0n) {
+        percentage = Math.min(100, Number((holderBalance * 10000n) / totalUserBalance) / 100);
+      }
       
       return {
         address: holder.wallet,

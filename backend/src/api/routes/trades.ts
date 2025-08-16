@@ -700,8 +700,12 @@ router.post('/confirm', authMiddleware, async (req: Request, res: Response) => {
         }
       });
 
-      // 2. Get current holder data first
+      // 2. DISABLED: Holder balance update - handled by indexer to prevent double-counting
+      // The indexer processes blockchain events and updates holder balances
+      // Having both the API and indexer update balances causes inflated amounts
       const tokenAmountBig = BigInt(tokenAmount);
+      
+      /* COMMENTED OUT TO PREVENT DOUBLE-COUNTING WITH INDEXER
       const existingHolder = await tx.holder.findUnique({
         where: {
           tokenAddress_wallet: {
@@ -755,6 +759,7 @@ router.post('/confirm', authMiddleware, async (req: Request, res: Response) => {
           rewardsClaimed: '0'
         }
       });
+      */
 
       // 3. Calculate volume metrics efficiently with caching
       // Invalidate cache first to ensure fresh calculation
@@ -801,7 +806,9 @@ router.post('/confirm', authMiddleware, async (req: Request, res: Response) => {
         }
       });
 
-      // 8. Delete holder if balance becomes zero or negative after sell
+      // 8. REMOVED: Delete holder logic - indexer handles holder records now
+      // Holder management is done by the indexer to prevent double-counting
+      /* COMMENTED OUT - INDEXER HANDLES THIS
       if (!isBuy) {
         const updatedHolder = await tx.holder.findUnique({
           where: { id: holder.id },
@@ -814,6 +821,7 @@ router.post('/confirm', authMiddleware, async (req: Request, res: Response) => {
           });
         }
       }
+      */
 
       return { trade, volumeMetrics, marketCapData, holderCount };
     }, {
