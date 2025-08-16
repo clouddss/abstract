@@ -44,6 +44,7 @@ export function TradingInterface({
   const [amount, setAmount] = useState('')
   const [slippageInput, setSlippageInput] = useState('1.0')
   const [isTrading, setIsTrading] = useState(false)
+  const [userTokenBalance, setUserTokenBalance] = useState<string>('0')
   const { slippage: slippageValue, setSlippage: setSlippageValue, calculateMinOutput } = useSlippage(1.0)
   const { handleError } = useErrorHandler()
   
@@ -200,6 +201,36 @@ export function TradingInterface({
     }
   }, [priceUpdate])
   
+  // Fetch user's token balance for sell orders
+  useEffect(() => {
+    if (tradeType === 'sell' && address && tokenAddress && publicClient) {
+      // Fetch token balance using ERC20 ABI
+      const fetchBalance = async () => {
+        try {
+          const balance = await publicClient.readContract({
+            address: tokenAddress as `0x${string}`,
+            abi: [
+              {
+                name: 'balanceOf',
+                type: 'function',
+                stateMutability: 'view',
+                inputs: [{ name: 'account', type: 'address' }],
+                outputs: [{ name: 'balance', type: 'uint256' }]
+              }
+            ],
+            functionName: 'balanceOf',
+            args: [address]
+          })
+          setUserTokenBalance(balance.toString())
+        } catch (error) {
+          console.error('Error fetching token balance:', error)
+          setUserTokenBalance('0')
+        }
+      }
+      fetchBalance()
+    }
+  }, [tradeType, address, tokenAddress, publicClient])
+
   // Update slippage value when input changes
   useEffect(() => {
     const value = parseFloat(slippageInput)
@@ -281,15 +312,35 @@ export function TradingInterface({
           
           {/* Quick amount buttons */}
           <div className="flex space-x-2 mt-3">
-            {['0.1', '0.5', '1.0', '5.0'].map((quickAmount) => (
-              <button
-                key={quickAmount}
-                onClick={() => setAmount(quickAmount)}
-                className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition-colors border border-gray-200"
-              >
-                {quickAmount}
-              </button>
-            ))}
+            {tradeType === 'buy' ? (
+              ['0.1', '0.5', '1.0', '5.0'].map((quickAmount) => (
+                <button
+                  key={quickAmount}
+                  onClick={() => setAmount(quickAmount)}
+                  className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition-colors border border-gray-200"
+                >
+                  {quickAmount}
+                </button>
+              ))
+            ) : (
+              ['10%', '25%', '50%', '100%'].map((percentage) => (
+                <button
+                  key={percentage}
+                  onClick={() => {
+                    // Calculate percentage of user's token balance
+                    const percent = parseInt(percentage) / 100
+                    if (userTokenBalance && userTokenBalance !== '0') {
+                      const balance = BigInt(userTokenBalance)
+                      const sellAmount = (balance * BigInt(Math.floor(percent * 100))) / 100n
+                      setAmount(formatTokenAmount(sellAmount.toString()))
+                    }
+                  }}
+                  className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition-colors border border-gray-200"
+                >
+                  {percentage}
+                </button>
+              ))
+            )}
           </div>
         </div>
 

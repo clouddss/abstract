@@ -270,13 +270,15 @@ router.post('/execute', authMiddleware, async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      txHash: '', // Will be filled by frontend after signing
-      status: 'pending',
-      message: 'Please sign the transaction in your wallet',
-      transactionData: {
-        to,
-        data,
-        value
+      data: {
+        txHash: '', // Will be filled by frontend after signing
+        status: 'pending',
+        message: 'Please sign the transaction in your wallet',
+        transactionData: {
+          to,
+          data,
+          value
+        }
       }
     });
 
