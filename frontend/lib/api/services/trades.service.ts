@@ -140,21 +140,6 @@ export class TradesService {
   /**
    * Get trade status by transaction hash
    */
-  async confirmTrade(data: {
-    txHash: string;
-    tokenAddress: Address;
-    tradeType: 'buy' | 'sell';
-  }): Promise<{
-    success: boolean;
-    data?: any;
-    message: string;
-  }> {
-    return apiClient.post('/trades/confirm', data);
-  }
-
-  /**
-   * Get trade status by transaction hash
-   */
   async getTradeStatus(txHash: string): Promise<TradeStatus> {
     return apiClient.get<TradeStatus>(`/trades/status/${txHash}`);
   }
