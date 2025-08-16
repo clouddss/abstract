@@ -27,7 +27,7 @@ import {
 } from 'lucide-react'
 import { useToken } from '@/hooks/useTokens'
 import { useTokenChart } from '@/hooks/useChart'
-import { formatETH, formatAddress, formatNumber, formatTimestamp, calculatePrice, getPriceChangeColor } from '@/lib/utils/format'
+import { formatETH, formatWei, formatAddress, formatNumber, formatTimestamp, calculatePrice, getPriceChangeColor } from '@/lib/utils/format'
 import { copyToClipboard, formatError } from '@/lib/utils/ui'
 import { toast } from 'sonner'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -221,7 +221,7 @@ export default function TokenPage() {
               <span>Market Cap</span>
             </div>
             <span className="text-xl font-bold">
-              {isLoading ? <Skeleton className="h-6 w-24" /> : formatETH(token?.marketCap || '0')} ETH
+              {isLoading ? <Skeleton className="h-6 w-24" /> : formatWei(token?.marketCap || '0')} ETH
             </span>
           </div>
 
@@ -231,7 +231,7 @@ export default function TokenPage() {
               <span>Volume 24h</span>
             </div>
             <span className="text-xl font-bold">
-              {isLoading ? <Skeleton className="h-6 w-24" /> : formatETH(token?.volume24h || '0')} ETH
+              {isLoading ? <Skeleton className="h-6 w-24" /> : formatWei(token?.volume24h || '0')} ETH
             </span>
           </div>
 
@@ -241,7 +241,7 @@ export default function TokenPage() {
               <span>Holders</span>
             </div>
             <span className="text-xl font-bold">
-              {isLoading ? <Skeleton className="h-6 w-16" /> : formatNumber(token?.holders || 0, 0)}
+              {isLoading ? <Skeleton className="h-6 w-16" /> : formatNumber(token?.stats?.totalHolders || token?.holderCount || 0, 0)}
             </span>
           </div>
 
