@@ -35,6 +35,8 @@ router.post('/estimate', validateRequest(estimateTradeSchema), async (req: Reque
   try {
     const { tokenAddress, type, amountIn } = req.body;
     const tradeType = type.toLowerCase(); // Convert BUY/SELL to buy/sell
+    
+    console.log('Trade estimate request:', { tokenAddress, type, amountIn });
 
     // Get token info
     const token = await prisma.token.findUnique({
@@ -110,7 +112,12 @@ router.post('/estimate', validateRequest(estimateTradeSchema), async (req: Reque
       newPrice = ethers.formatEther(currentPrice);
     }
 
-    res.json({
+    // Ensure all values are defined
+    if (!output || !newPrice || !fee || !priceImpact) {
+      throw new Error('Failed to calculate trade parameters');
+    }
+
+    const response = {
       success: true,
       data: {
         tokenAddress,
@@ -123,7 +130,10 @@ router.post('/estimate', validateRequest(estimateTradeSchema), async (req: Reque
         minimumReceived: ethers.parseEther(output).toString(), // In wei
         executionPrice: ethers.parseEther(newPrice).toString() // In wei
       }
-    });
+    };
+    
+    console.log('Trade estimate response:', response);
+    res.json(response);
 
   } catch (error) {
     console.error('Error estimating trade:', error);
