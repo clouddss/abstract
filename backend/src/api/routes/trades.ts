@@ -117,7 +117,7 @@ router.post('/estimate', validateRequest(estimateTradeSchema), async (req: Reque
         tradeType: type, // Return uppercase as frontend expects
         inputAmount: amountIn, // Return in wei as sent
         outputAmount: ethers.parseEther(output).toString(), // Return in wei
-        priceImpact,
+        priceImpact: parseFloat(priceImpact), // Return as number
         currentPrice: ethers.parseEther(newPrice).toString(), // Return in wei
         fee: ethers.parseEther(fee).toString(), // Return in wei
         minimumReceived: ethers.parseEther(output).toString(), // In wei
