@@ -69,13 +69,13 @@ export default function LaunchPage() {
       // The API client returns the data directly
       const { to, data, value } = launchResponse
 
-      // Step 2: Send transaction via wallet (let wallet handle gas estimation)
+      // Step 2: Send transaction via wallet (let MetaMask estimate)
       console.log('Sending transaction...', { to, data, value })
       const hash = await walletClient.sendTransaction({
         to: to as `0x${string}`,
         data: data as `0x${string}`,
         value: BigInt(value)
-        // Don't specify gas - let wallet estimate it
+        // Let MetaMask estimate gas
       })
 
       console.log('Transaction sent:', hash)
