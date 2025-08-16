@@ -10,22 +10,26 @@ export const CONTRACT_ADDRESSES = {
   PLATFORM_TREASURY: '0x25519F356174b2f4Db629dc8DD916043b0f8447D'
 };
 
-// MinimalLaunchFactory ABI - simplified contract
+// LaunchFactory ABI
 export const LAUNCH_FACTORY_ABI = [
   {
     "inputs": [
       {
-        "internalType": "string",
-        "name": "name",
-        "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "symbol",
-        "type": "string"
+        "components": [
+          { "internalType": "string", "name": "name", "type": "string" },
+          { "internalType": "string", "name": "symbol", "type": "string" },
+          { "internalType": "string", "name": "description", "type": "string" },
+          { "internalType": "string", "name": "imageUrl", "type": "string" },
+          { "internalType": "string", "name": "website", "type": "string" },
+          { "internalType": "string", "name": "twitter", "type": "string" },
+          { "internalType": "string", "name": "telegram", "type": "string" }
+        ],
+        "internalType": "struct ILaunchFactory.TokenMetadata",
+        "name": "metadata",
+        "type": "tuple"
       }
     ],
-    "name": "deployToken",
+    "name": "launchToken",
     "outputs": [
       {
         "internalType": "address",
@@ -264,8 +268,19 @@ export async function estimateGasForDeploy(name: string, symbol: string): Promis
 
 export function encodeDeployTokenData(name: string, symbol: string, description?: string, imageUrl?: string, website?: string, twitter?: string, telegram?: string): string {
   const iface = new ethers.Interface(LAUNCH_FACTORY_ABI);
-  // MinimalLaunchFactory just takes name and symbol
-  return iface.encodeFunctionData('deployToken', [name, symbol]);
+  
+  // LaunchFactory expects a TokenMetadata struct
+  const metadata = {
+    name: name,
+    symbol: symbol,
+    description: description || '',
+    imageUrl: imageUrl || '',
+    website: website || '',
+    twitter: twitter || '',
+    telegram: telegram || ''
+  };
+  
+  return iface.encodeFunctionData('launchToken', [metadata]);
 }
 
 export function decodeTokenLaunchedEvent(receipt: ethers.TransactionReceipt): {
