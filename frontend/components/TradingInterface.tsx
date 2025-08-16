@@ -304,7 +304,7 @@ export function TradingInterface({
                 <div className="flex justify-between">
                   <span className="text-gray-600">You receive</span>
                   <span className="font-semibold text-primary">
-                    {formatETH(estimateData.amountOut)} {tradeType === 'buy' ? tokenSymbol : 'ETH'}
+                    {formatETH(estimateData.amountOut || estimateData.outputAmount)} {tradeType === 'buy' ? tokenSymbol : 'ETH'}
                   </span>
                 </div>
                 
@@ -323,7 +323,7 @@ export function TradingInterface({
                 <div className="flex justify-between border-t border-gray-200 pt-2">
                   <span className="text-gray-600">Minimum received</span>
                   <span className="font-semibold">
-                    {formatETH(calculateMinOutput(estimateData.amountOut))}
+                    {formatETH(calculateMinOutput(estimateData.amountOut || estimateData.outputAmount))}
                     {' '}{tradeType === 'buy' ? tokenSymbol : 'ETH'}
                   </span>
                 </div>
