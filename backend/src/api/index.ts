@@ -113,7 +113,11 @@ app.use(express.json({
   verify: (req, res, buf, encoding) => {
     // Store raw body for signature verification if needed
     if (buf && buf.length) {
-      (req as any).rawBody = buf.toString(encoding || 'utf8');
+      // Ensure encoding is a valid BufferEncoding
+      const validEncoding = encoding && ['ascii', 'utf8', 'utf16le', 'ucs2', 'base64', 'base64url', 'latin1', 'hex'].includes(encoding) 
+        ? encoding as BufferEncoding 
+        : 'utf8';
+      (req as any).rawBody = buf.toString(validEncoding);
     }
   }
 }));

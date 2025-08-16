@@ -1,4 +1,5 @@
 import { prisma } from '../../database/client';
+import { TradeType } from '@prisma/client';
 
 interface VolumeCache {
   tokenAddress: string;
@@ -79,12 +80,12 @@ async function calculateVolumeData(tokenAddress: string): Promise<VolumeCache> {
 
   // Calculate ETH volume properly
   const volume24h = volume24hTrades.reduce((sum, trade) => {
-    const ethAmount = trade.type === 'buy' ? trade.amountIn : trade.amountOut;
+    const ethAmount = trade.type === TradeType.BUY ? trade.amountIn : trade.amountOut;
     return sum + BigInt(ethAmount);
   }, 0n);
 
   const volume7d = volume7dTrades.reduce((sum, trade) => {
-    const ethAmount = trade.type === 'buy' ? trade.amountIn : trade.amountOut;
+    const ethAmount = trade.type === TradeType.BUY ? trade.amountIn : trade.amountOut;
     return sum + BigInt(ethAmount);
   }, 0n);
 

@@ -13,7 +13,6 @@ class CacheManager {
 
   constructor() {
     this.redis = new Redis(appConfig.REDIS_URL, {
-      retryDelayOnFailover: 100,
       maxRetriesPerRequest: 3,
       enableReadyCheck: true,
       lazyConnect: true,
@@ -123,7 +122,11 @@ class CacheManager {
     }
 
     try {
-      return await this.redis.del(key);
+      if (Array.isArray(key)) {
+        return await this.redis.del(...key);
+      } else {
+        return await this.redis.del(key);
+      }
     } catch (error) {
       appLogger.error({ error, key }, 'Error deleting cache value');
       return 0;
@@ -250,8 +253,8 @@ class CacheManager {
     }
   }
 
-  // Get cache statistics
-  async getStats(): Promise<any> {
+  // Get Redis info and statistics
+  async getRedisInfo(): Promise<any> {
     if (!this.isConnected()) return null;
 
     try {
@@ -264,7 +267,7 @@ class CacheManager {
         memory: this.parseRedisInfo(info)
       };
     } catch (error) {
-      appLogger.error({ error }, 'Error getting Redis stats');
+      appLogger.error({ error }, 'Error getting Redis info');
       return null;
     }
   }

@@ -377,24 +377,18 @@ async function calculateVolumeMetrics(tokenAddress: string, ethAmount: string, t
   // Use database aggregation for efficient volume calculation
   const [volume24hResult, volume7dResult, currentToken] = await Promise.all([
     // Calculate 24h volume using SQL aggregation
-    prisma.trade.aggregate({
+    prisma.trade.count({
       where: {
         tokenAddress: tokenAddress.toLowerCase(),
         timestamp: { gte: oneDayAgo }
-      },
-      _sum: {
-        amountIn: true // For buys this is ETH, for sells this is tokens - we'll convert
       }
     }),
     
-    // Calculate 7d volume using SQL aggregation
-    prisma.trade.aggregate({
+    // Calculate 7d volume using SQL aggregation  
+    prisma.trade.count({
       where: {
         tokenAddress: tokenAddress.toLowerCase(),
         timestamp: { gte: sevenDaysAgo }
-      },
-      _sum: {
-        amountIn: true
       }
     }),
     
@@ -426,12 +420,12 @@ async function calculateVolumeMetrics(tokenAddress: string, ethAmount: string, t
 
   // Calculate ETH volume properly (amountIn for buys, amountOut for sells)
   const volume24h = volume24hDetailed.reduce((sum, trade) => {
-    const ethAmount = trade.type === 'buy' ? trade.amountIn : trade.amountOut;
+    const ethAmount = trade.type === TradeType.BUY ? trade.amountIn : trade.amountOut;
     return sum + BigInt(ethAmount);
   }, 0n);
 
   const volume7d = volume7dDetailed.reduce((sum, trade) => {
-    const ethAmount = trade.type === 'buy' ? trade.amountIn : trade.amountOut;
+    const ethAmount = trade.type === TradeType.BUY ? trade.amountIn : trade.amountOut;
     return sum + BigInt(ethAmount);
   }, 0n);
 
@@ -457,6 +451,24 @@ async function updateHolderBalance(
 ) {
   const tokenAmountBig = BigInt(tokenAmount);
   
+  // Get current holder to calculate new balances
+  const currentHolder = await prisma.holder.findUnique({
+    where: {
+      tokenAddress_wallet: {
+        tokenAddress: tokenAddress.toLowerCase(),
+        wallet: holderAddress.toLowerCase()
+      }
+    }
+  });
+
+  const currentBalance = BigInt(currentHolder?.balance || '0');
+  const currentTotalBought = BigInt(currentHolder?.totalBought || '0');
+  const currentTotalSold = BigInt(currentHolder?.totalSold || '0');
+
+  const newBalance = isBuy ? currentBalance + tokenAmountBig : currentBalance - tokenAmountBig;
+  const newTotalBought = isBuy ? currentTotalBought + tokenAmountBig : currentTotalBought;
+  const newTotalSold = !isBuy ? currentTotalSold + tokenAmountBig : currentTotalSold;
+
   // Use upsert for atomic operation
   const holder = await prisma.holder.upsert({
     where: {
@@ -466,15 +478,9 @@ async function updateHolderBalance(
       }
     },
     update: {
-      balance: {
-        [isBuy ? 'increment' : 'decrement']: tokenAmountBig.toString()
-      },
-      totalBought: isBuy ? {
-        increment: tokenAmountBig.toString()
-      } : undefined,
-      totalSold: !isBuy ? {
-        increment: tokenAmountBig.toString()
-      } : undefined,
+      balance: newBalance.toString(),
+      totalBought: newTotalBought.toString(),
+      totalSold: newTotalSold.toString(),
       lastActivity: timestamp,
       updatedAt: timestamp
     },
@@ -494,7 +500,7 @@ async function updateHolderBalance(
   });
 
   // If selling and balance becomes zero or negative, remove the holder
-  if (!isBuy && BigInt(holder.balance) <= 0n) {
+  if (!isBuy && newBalance <= 0n) {
     await prisma.holder.delete({
       where: { id: holder.id }
     });
@@ -533,7 +539,7 @@ async function calculateMarketCap(tokenAddress: string, bondingCurveAddress: str
     }
 
     // Market cap = current price * circulating supply
-    const marketCap = (currentPrice * circulatingSupply) / BigInt(ethers.parseEther('1'));
+    const marketCap = (BigInt(currentPrice) * BigInt(circulatingSupply)) / BigInt(ethers.parseEther('1'));
     
     return {
       marketCap: marketCap.toString(),
@@ -551,7 +557,7 @@ async function calculateMarketCap(tokenAddress: string, bondingCurveAddress: str
     // Use a default price if bonding curve call fails
     const defaultPrice = ethers.parseEther('0.000001');
     const circulatingSupply = BigInt(token?.soldSupply || '0');
-    const marketCap = (defaultPrice * circulatingSupply) / BigInt(ethers.parseEther('1'));
+    const marketCap = (BigInt(defaultPrice) * circulatingSupply) / BigInt(ethers.parseEther('1'));
     
     return {
       marketCap: marketCap.toString(),
@@ -619,7 +625,7 @@ router.post('/confirm', authMiddleware, async (req: Request, res: Response) => {
 
         if (parsed && (parsed.name === 'TokensPurchased' || parsed.name === 'TokensSold')) {
           tradeData = {
-            type: parsed.name === 'TokensPurchased' ? 'buy' : 'sell',
+            type: parsed.name === 'TokensPurchased' ? TradeType.BUY : TradeType.SELL,
             user: parsed.args[0],
             ethAmount: ethers.formatEther(parsed.args[1]),
             tokenAmount: ethers.formatEther(parsed.args[2]),
@@ -654,7 +660,7 @@ router.post('/confirm', authMiddleware, async (req: Request, res: Response) => {
     const timestamp = new Date();
     const ethAmount = ethers.parseEther(tradeData.ethAmount).toString();
     const tokenAmount = ethers.parseEther(tradeData.tokenAmount).toString();
-    const isBuy = tradeType === 'buy';
+    const isBuy = tradeType === 'buy' || tradeType === TradeType.BUY;
     const feeAmount = (BigInt(ethAmount) * 100n) / 10000n; // 1% fee
 
     // Use database transaction for atomicity
@@ -665,7 +671,7 @@ router.post('/confirm', authMiddleware, async (req: Request, res: Response) => {
           tokenAddress: tokenAddress.toLowerCase(),
           trader: req.user!.address.toLowerCase(),
           userId: req.user!.userId,
-          type: tradeType,
+          type: tradeType === 'buy' ? TradeType.BUY : TradeType.SELL,
           amountIn: isBuy ? ethAmount : tokenAmount,
           amountOut: isBuy ? tokenAmount : ethAmount,
           price: ethers.parseEther(tradeData.newPrice).toString(),

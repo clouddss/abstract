@@ -196,8 +196,8 @@ export class CircuitBreaker {
       this.onSuccess();
       return result;
     } catch (error) {
-      this.onFailure();
-      if (fallback && this.state === 'OPEN') {
+      const wasCircuitOpened = this.onFailure();
+      if (fallback && wasCircuitOpened) {
         return fallback();
       }
       throw error;
@@ -209,7 +209,7 @@ export class CircuitBreaker {
     this.state = 'CLOSED';
   }
 
-  private onFailure(): void {
+  private onFailure(): boolean {
     this.failures++;
     this.lastFailureTime = Date.now();
     
@@ -219,7 +219,9 @@ export class CircuitBreaker {
         failures: this.failures,
         threshold: this.failureThreshold
       }, 'Circuit breaker opened due to repeated failures');
+      return true;
     }
+    return false;
   }
 
   getState(): string {

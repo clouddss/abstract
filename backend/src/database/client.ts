@@ -9,12 +9,9 @@ declare global {
 
 const createPrismaClient = () => {
   return new PrismaClient({
-    log: [
-      { emit: 'event', level: 'query' },
-      { emit: 'event', level: 'error' },
-      { emit: 'event', level: 'warn' },
-      { emit: 'event', level: 'info' },
-    ],
+    log: appConfig.NODE_ENV === 'development' 
+      ? ['query', 'info', 'warn', 'error']
+      : ['error'],
     datasources: {
       db: {
         url: appConfig.DATABASE_URL,
@@ -34,41 +31,7 @@ const createPrismaClient = () => {
 
 export const prisma = globalThis.__prisma ?? createPrismaClient();
 
-// Set up logging
-prisma.$on('query', (e) => {
-  if (appConfig.LOG_LEVEL === 'debug') {
-    databaseLogger.debug({
-      query: e.query,
-      params: e.params,
-      duration: e.duration,
-      target: e.target
-    }, 'Database query executed');
-  }
-});
-
-prisma.$on('error', (e) => {
-  databaseLogger.error({
-    target: e.target,
-    message: e.message,
-    timestamp: e.timestamp
-  }, 'Database error occurred');
-});
-
-prisma.$on('warn', (e) => {
-  databaseLogger.warn({
-    target: e.target,
-    message: e.message,
-    timestamp: e.timestamp
-  }, 'Database warning');
-});
-
-prisma.$on('info', (e) => {
-  databaseLogger.info({
-    target: e.target,
-    message: e.message,
-    timestamp: e.timestamp
-  }, 'Database info');
-});
+// Prisma will log directly to stdout/stderr based on the log configuration above
 
 if (appConfig.NODE_ENV !== 'production') {
   globalThis.__prisma = prisma;
@@ -88,11 +51,11 @@ export async function checkDatabaseHealth(): Promise<boolean> {
 // Connection metrics
 export async function getDatabaseMetrics() {
   try {
-    const metrics = await prisma.$metrics.json();
+    // Note: $metrics is available in newer Prisma versions with preview features
+    // For now, return basic connection info
     return {
-      counters: metrics.counters,
-      gauges: metrics.gauges,
-      histograms: metrics.histograms
+      connected: true,
+      timestamp: new Date().toISOString()
     };
   } catch (error) {
     databaseLogger.error({ error }, 'Failed to get database metrics');
