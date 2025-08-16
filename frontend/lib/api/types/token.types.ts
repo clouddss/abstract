@@ -82,11 +82,14 @@ export interface TokenDetails extends TokenListItem {
   curveSupply: string;
   currentPrice: string;
   priceChange24h: number;
+  bondingCurveProgress: number; // Percentage 0-100
+  migrationProgress: number; // Percentage 0-100
   topHolders: TokenHolder[];
   recentTrades: TokenTrade[];
   stats: {
     totalTrades: number;
     totalHolders: number;
+    actualHolders?: number;
   };
 }
 
